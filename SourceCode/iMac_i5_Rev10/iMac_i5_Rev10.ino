@@ -12,23 +12,44 @@
  * by MacTester in his excellent iMac creations
  *
  * See : http://www.tonymacx86.com/imac-mods/107859-kiwis-next-project-imac-g5.html
+ * Source Repository : https://github.com/kiwisincebirth/iMacG5/tree/master/SourceCode
  * Platform : Arduino Leonardo ATMega32U4
  * Author : KiwiSinceBirth
  * Contributions : MacTester (capacitance)
- * Written : February 2014
+ * Written : July 2014
  */
 
 //#define DEBUG
+
 #include <DebugUtils.h>
 
 #include <PWMFrequency.h>
 #include <SimpleTimer.h>
 #include <FiniteStateMachine.h>
 #include <EEPROMex.h>
+<<<<<<< HEAD
+=======
+#include <EEPROMVar.h>
+>>>>>>> FETCH_HEAD
 
+#ifndef DEBUG
+// while debugging cant afford extra overhead
+// so these libraries are excluded
 #include <CapacitiveSensorDue.h>
 #include <OneWire.h>
 #include <DallasTemperature.h>
+#endif
+
+/**
+ * The Libraries: DebugUtils, FSM, PWMFrequency, SimpleTimer can be obtained here
+ * https://github.com/kiwisincebirth/Arduino/tree/master/Libraries
+ *
+ * And the following libraries come from here
+ * EEPROMEx - https://github.com/thijse/Arduino-Libraries/tree/master/EEPROMEx
+ * CapacitiveSensorDue - https://github.com/arduino-libraries/CapacitiveSensor/tree/master/libraries
+ * OneWire - http://www.pjrc.com/teensy/td_libs_OneWire.html
+ * DallasTemperature - https://github.com/milesburton/Arduino-Temperature-Control-Library
+ */
 
 // Some Time Constants
 #define ZERO 0
@@ -44,7 +65,7 @@
 #define ONE_SECOND 1000
 #define TWO_SECOND 2000
 #define FIVE_SECOND 5000
-#define TEN_SECOND 1000
+#define TEN_SECOND 10000
 #define THIRTY_SECOND 30000
 #define ONE_MINUTE 60000
 #define TWO_MINUTE 120000
@@ -72,6 +93,7 @@
 // --------------
 // Better Capacitance Calibration Routines, that ask user to touch sensor, then measure
 // If brightness change by Capacatance report report back to the app, so slider can moved
+// System State command SS - FSM State, Power, Inverter, etc
 //
 
 // Some important constants
@@ -200,6 +222,7 @@ const byte EEP_MAX_LED_PWM = 14; // Maximum PWM Value for Front Panel LED Effect
 const byte EEP_INVERTER_STARTUP_DELAY = 15; // milliseconds before starting inverter 
 const byte EEP_CAP_CONTROL = 16; // is the capacatace controller enabled 
 const byte EEP_FAN_CONTROL = 17; // is the fan temp controller enabled  
+const byte EEP_INVERTER_WARM_DELAY = 18; // milliseconds before starting inverter 
 
 //
 // Names of Data stored in these locations
@@ -223,6 +246,7 @@ prog_char string_14[] PROGMEM = "MaxLED-PWM";
 prog_char string_15[] PROGMEM = "InvertStartDly";  
 prog_char string_16[] PROGMEM = "CapBrigEnabled"; 
 prog_char string_17[] PROGMEM = "FanTempEnabled"; 
+prog_char string_18[] PROGMEM = "InvertWarmDly"; 
 
 //
 // the following must contain all strings from above
@@ -231,7 +255,7 @@ prog_char string_17[] PROGMEM = "FanTempEnabled";
 PROGMEM const char *eepName[] = { 
   string_00, string_01, string_02, string_03, string_04, string_05, string_06, 
   string_07, string_08, string_09, string_10, string_11, string_12, string_13, 
-  string_14, string_15, string_16, string_17 };
+  string_14, string_15, string_16, string_17, string_18 };
 
 //
 // Number of Bytes store 1 - Byte ; 2 - Int ; 4 - Long;
@@ -241,7 +265,10 @@ const byte EEP_BYTE = 1;
 const byte EEP_INT = 2;
 const byte EEP_LONG = 4;
 
-const byte eepBytes[] = {EEP_BYTE,EEP_BYTE,EEP_BYTE,EEP_BYTE,EEP_BYTE,EEP_INT,EEP_INT,EEP_INT,EEP_INT,EEP_INT,EEP_INT,EEP_INT,EEP_BYTE,EEP_BYTE,EEP_BYTE,EEP_INT,EEP_BYTE,EEP_BYTE};
+const byte eepBytes[] = {
+  EEP_BYTE,EEP_BYTE,EEP_BYTE,EEP_BYTE,EEP_BYTE,EEP_INT ,EEP_INT ,
+  EEP_INT ,EEP_INT ,EEP_INT ,EEP_INT ,EEP_INT ,EEP_BYTE,EEP_BYTE,
+  EEP_BYTE,EEP_INT ,EEP_BYTE,EEP_BYTE,EEP_INT};
 
 /**
  * Setup the device if not initialised, flasing the eeprom with defaults, if they dont exist
@@ -257,44 +284,31 @@ void checkEepromConfiguration() {
   byte currentHighest = eepromRead(EEP_VERSION);
   if ( currentHighest == 255 ) currentHighest = 0;
 
-  // Default Brightness and TEMPS
-  if ( currentHighest < EEP_INVERTER_STARTUP_DELAY ) { 
+  // All The Deefault Values
+  if ( currentHighest < EEP_FAN_CONTROL ) { 
     
     // write default values
     eepromWrite( EEP_BRIGHT, 100 ); // 100% brightness
     eepromWrite( EEP_MIN_BRIGHT, 55 ); // PWM
     eepromWrite( EEP_MAX_BRIGHT, 255 ); // PWM
     eepromWrite( EEP_BRIGHT_INC, 5 ); // Brightness Increme
-
-    // write default values
     eepromWrite( EEP_MIN_TEMP, 0 ); // 100ths of a dreee e.g. 2000 = 20.0 degrees
     eepromWrite( EEP_MAX_TEMP, 2000 ); // 100ths of a dreee
     eepromWrite( EEP_MIN_VOLT, 330 ); // 100ths of a volt e.g. 330 = 3.3V
     eepromWrite( EEP_MAX_VOLT, 1000 ); // 100ths of a volt
-    
-    // write default values
     eepromWrite( EEP_DN_CAP_THR, 100 ); // Down Threashhold
     eepromWrite( EEP_UP_CAP_THR, 100 ); // Up Threashold
     eepromWrite( EEP_CAP_SAMPLE, 200 ); // Samples
-    
-    // write default values
     eepromWrite( EEP_DEPRECATED1, ZERO ); // Was Old Default Model ID
     eepromWrite( EEP_MIN_LED_PWM, 0 ); // Minimum Effects PWM for Front Panel LED
     eepromWrite( EEP_MAX_LED_PWM, 255 ); // Maximum Effects PWM for Front Panel LED
     eepromWrite( EEP_INVERTER_STARTUP_DELAY, 100 ); // Inverter Startup delay miliseconds
-
-    // and version number
-    currentHighest = EEP_INVERTER_STARTUP_DELAY;
-  }
-
-  // Default Brightness and TEMPS
-  if ( currentHighest < EEP_FAN_CONTROL ) { 
-
     eepromWrite( EEP_CAP_CONTROL, 1 ); // Maximum Effects PWM for Front Panel LED
     eepromWrite( EEP_FAN_CONTROL, 1 ); // Inverter Startup delay miliseconds
+    eepromWrite( EEP_INVERTER_WARM_DELAY, 100 ); // Inverter Startup delay miliseconds
 
     // and version number
-    currentHighest = EEP_FAN_CONTROL;
+    currentHighest = EEP_INVERTER_WARM_DELAY;
   }
 
   // finally update eprom with Highest numbered item stored in EEPROM
@@ -517,22 +531,25 @@ State STATE_POWERUP   = State (enterPowerUpMode  ,updatePowerUpMode  ,leavePower
 FiniteStateMachine fsm=FiniteStateMachine(STATE_STARTUP);
 
 /**
- * Called by the StartUp State, 
- * transitions to next state based on Model ID
- */
-void startupAndTransition() {
-
-      // iMac G5 20 - KiwiSinceBirth - Startup
-      fsm.transitionTo(STATE_ACTIVE);
-}
-
-/**
  * Main Loop that processes the FSM contoller loop
  */
 void loopFiniteStateMachine() {
   
   // Main Update Loop for The FSM
   fsm.update();
+}
+
+/**
+ * Called by the StartUp State, 
+ * transitions to next state based on Model ID
+ */
+void startupAndTransition() {
+
+  // signal the sucessfule startup
+  activateFrontPanelFlash(3);
+
+  // iMac G5 20 - KiwiSinceBirth - Startup
+  fsm.transitionTo(STATE_ACTIVE);
 }
 
 //
@@ -542,15 +559,11 @@ void loopFiniteStateMachine() {
 void enterActiveMode() {
   
   // DEBUG
-  DEBUG_PRINT("ENTER-ACTIVE");
+  DEBUG_PRINTF("ENTER-ACTIVE");
 
   // TURN Basics On
   activatePSU(); // Ensure the ATX G5 PSU is active
   activateTempFanControl(); // fan temperatire controller
-  
-  if ( fsm.wasInState(STATE_STARTUP) ) {
-    activateFrontPanelFlash(3);
-  }
   
   // If Active State is coming from A BOOTUP state (either COLD or WARM)
   if ( fsm.wasInState(STATE_POWERUP) || fsm.wasInState(STATE_POWERDOWN) ) {
@@ -559,9 +572,18 @@ void enterActiveMode() {
     initiateTimedChime(ONE_HUNDRED_MILLIS);
       
     // read the startup dealy - before powering on the LCD
+    int invDelay = eepromRead(EEP_INVERTER_STARTUP_DELAY);
+
+    if ( fsm.wasInState(STATE_POWERDOWN) ) {
+      // from warm start takes slightly longer.
+      invDelay = eepromRead(EEP_INVERTER_WARM_DELAY);
+    }
+
+    DEBUG_PRINTF("Inverter Delay");
+    DEBUG_PRINT(invDelay);
+
     // so that startup hides BIOS bootup messages.
-    int delay = eepromRead(EEP_INVERTER_STARTUP_DELAY);
-    timer.setTimeout(delay,activateInverterAndKillLED);
+    timer.setTimeout(invDelay,activateInverterAndKillLED);
     
   } else {
     
@@ -592,13 +614,13 @@ void updateActiveMode() {
 
 void leaveActiveMode() {
   
-  // DEBUG
-  DEBUG_PRINT("LEAVE-ACTIVE");
-
   // Turn off Fans,and LCD
   deactivateInverter();
   deactivateTempFanControl();
   deactivateCapTouchBright();
+
+  // DEBUG
+  DEBUG_PRINTF("LEAVE-ACTIVE");
 }
 
 //
@@ -608,7 +630,7 @@ void leaveActiveMode() {
 void enterSleepMode() {
 
   // DEBUG
-  DEBUG_PRINT("ENTER-SLEEP");
+  DEBUG_PRINTF("ENTER-SLEEP");
 
   activateFrontPanelLEDBreath();
 }
@@ -627,16 +649,18 @@ void updateSleepMode() {
 void leaveSleepMode() {
 
   // DEBUG
-  DEBUG_PRINT("LEAVE-ACTIVE");
+  DEBUG_PRINTF("LEAVE-ACTIVE");
 }
 
+//
 // POWER DOWN STATE - STATE_POWERDOWN
 // Occurs When CPU shuts down.
+//
 
 void enterPowerDownMode() {
 
   // DEBUG
-  DEBUG_PRINT("ENTER-PWR-DN");
+  DEBUG_PRINTF("ENTER-PWR-DN");
  
   // Enable 30 second power down led effect
   activateFrontPanelLEDRampDn(THIRTY_SECOND);
@@ -656,7 +680,7 @@ void updatePowerDownMode() {
   if ( fsm.timeInCurrentState() >= THIRTY_SECOND) {
     
     // DEBUG
-    DEBUG_PRINT("LeavePwrDnForInactive30Sec");
+    DEBUG_PRINTF("Powered Down for 30 Seconds -> Inactive");
   
     // if 30 seconds have been reached Transition to Inactive Mode
     fsm.transitionTo(STATE_INACTIVE);    
@@ -675,7 +699,7 @@ void updatePowerDownMode() {
 void leavePowerDownMode() {
 
   // DEBUG
-  DEBUG_PRINT("LEAVE-ACTIVE");
+  DEBUG_PRINTF("LEAVE-PWR-DN");
 }
 
 //
@@ -686,7 +710,7 @@ void leavePowerDownMode() {
 void enterInactiveMode() {
   
   // DEBUG
-  DEBUG_PRINT("ENTER-INACTIVE");
+  DEBUG_PRINTF("ENTER-INACTIVE");
  
   // Turn everything Off.
   deactivateFrontPanelLED(); 
@@ -697,19 +721,21 @@ void updateInactiveMode() {
 
   // Was a PWr button detected, then power up
   if ( powerButtonDetection() ) {
+
+    // DEBUG
+    DEBUG_PRINTF("Front Panel Power Button Detected -> PowerUp");
+
     fsm.transitionTo(STATE_POWERUP);
   }
 }
 
 void leaveInactiveMode() {
 
-  // DEBUG
-  DEBUG_PRINT("LEAVE-INACTIVE");
-
-  // Make sure PSU is turned back on
-  activatePSU();
-  
+  // curtosy showing user action
   activateFrontPanelFlash(1);
+
+  // DEBUG
+  DEBUG_PRINTF("LEAVE-INACTIVE");
 }
 
 //
@@ -723,10 +749,13 @@ byte powerupeventsequence = 1;
 void enterPowerUpMode() {
 
   // DEBUG
-  DEBUG_PRINT("ENTER-PWR-UP");
+  DEBUG_PRINTF("ENTER-PWR-UP");
 
+  // Make sure PSU is turned back on
+  activatePSU();
+  
   // wait a short time and press the PWR button, ie wait for pwr to come up
-  initiatePowerButtonPress( FIVE_HUNDRED_MILLIS );
+  initiatePowerButtonPress( ONE_SECOND );
 
   // Ramp the LED slowely up over ten seconds
   activateFrontPanelLEDRampUp( TEN_SECOND );
@@ -741,7 +770,7 @@ void updatePowerUpMode() {
   if ( fsm.timeInCurrentState() >= TEN_SECOND) {
     
     // DEBUG
-    DEBUG_PRINT("LeavePwrUpForInactive10Sec");
+    DEBUG_PRINTF("Powered Up for 10 Seconds -> Inactive");
 
     // The NUC failes to power on, so shutdown again.
     fsm.transitionTo(STATE_INACTIVE);    
@@ -752,15 +781,24 @@ void updatePowerUpMode() {
     // it does some extra things, not done from subsequnt WARM boots.
     // We need to track this so FSM doesnt get confused latter on.
     
+    // DEBUG
+    DEBUG_PRINTF("S0 -> Sequence 2");
+
     // from a COLD boot the LED flashes ONCE, comes on (S0)
     powerupeventsequence = 2;
 
   } else if ( powerupeventsequence == 2 && powerS5() ) {
 
+    // DEBUG
+    DEBUG_PRINTF("S5 -> Sequence 3");
+
     // from a COLD boot the LED flashes ONCE, ie then turns off (S5)
     powerupeventsequence = 3;
     
   } else if ( powerupeventsequence == 3 && powerS0() ) {
+
+    // DEBUG
+    DEBUG_PRINTF("S0 -> Active");
 
     // then ther is a second or so delay 
     // when the PWR light comes back on (S0) NUC is active
@@ -772,7 +810,7 @@ void updatePowerUpMode() {
 
 void leavePowerUpMode() {
   // DEBUG
-  DEBUG_PRINT("LEAVE-PWR-UP");
+  DEBUG_PRINTF("LEAVE-PWR-UP");
 }
 
 //
@@ -1024,12 +1062,6 @@ float computeTempFactor( float temp ) {
 // -----------------------
 //
 
-// 1M resistor between pins 4 & 2, pin 2 is sensor pin
-CapacitiveSensorDue dnSensor = CapacitiveSensorDue(TOUCH_COMMON_PIN_CAP,TOUCH_DOWN_PIN_CAP);	
-
-// 1M resistor between pins 4 & 6, pin 6 is sensor pin
-CapacitiveSensorDue upSensor = CapacitiveSensorDue(TOUCH_COMMON_PIN_CAP,TOUCH_UP_PIN_CAP);	
-
 /**
  * Have we got a positive DOWN sensor reading
  */
@@ -1043,6 +1075,21 @@ boolean isDnSensorReadingOverThreshold() {
 boolean isUpSensorReadingOverThreshold() {
   return getUpSensorReading() > eepromRead(EEP_UP_CAP_THR);
 }
+
+// while debugging cant afford extra overhead
+#ifdef DEBUG
+
+long getDnSensorReading    () { return 0; }
+long getUpSensorReading    () { return 0; }
+void calibrateSensorReading() { }
+
+#else
+
+// 1M resistor between pins 4 & 2, pin 2 is sensor pin
+CapacitiveSensorDue dnSensor = CapacitiveSensorDue(TOUCH_COMMON_PIN_CAP,TOUCH_DOWN_PIN_CAP);	
+
+// 1M resistor between pins 4 & 6, pin 6 is sensor pin
+CapacitiveSensorDue upSensor = CapacitiveSensorDue(TOUCH_COMMON_PIN_CAP,TOUCH_UP_PIN_CAP);	
 
 /**
  * Read The Down sensor directly
@@ -1063,11 +1110,20 @@ void calibrateSensorReading() {
   dnSensor.calibrate();
 }
 
+#endif
+
 //
 // ----------
 // TEMP INPUT
 // ----------
 //
+
+#ifdef DEBUG
+
+float getTempDiff()    { return 5; }
+float getAmbientTemp() { return 20; }
+  
+#else
 
 float ambient_temp = DEVICE_DISCONNECTED_C;
 
@@ -1110,6 +1166,8 @@ float getAmbientTemp() {
   
   return ambient_temp;
 }
+
+#endif
 
 //
 // -----------------------------
@@ -1180,8 +1238,13 @@ byte powerState() {
   // if the last observered value different to last reported
   // and sufficient time has exceeded (say 10ms) 
   if ( lastObservered != reportedState && firstObservervedWhen-millis() > FIFTY_MILLIS ) {
+    
     // then we can set the last observered value is probably final so
     reportedState = lastObservered;
+
+    // DEBUG
+    DEBUG_PRINTF("POWER-STATE Reported S");
+    DEBUG_PRINT(reportedState);
   }
   
   // return the reported state, with 50ms delay to confirm the reading.
@@ -1219,11 +1282,6 @@ byte powerStateRawValue() {
 // -----------------------------------
 //
 
-const byte BUTTON_NOT_INITED = 0;
-const byte BUTTON_INPUT  = 1;
-const byte BUTTON_OUTPUT = 2;
-
-byte powerbuttonMode = BUTTON_NOT_INITED; // 0 - Init; 1 - Input; 2 - Output
 long dealybeforePressing; // time before pressing button.
 
 /**
@@ -1233,14 +1291,11 @@ long dealybeforePressing; // time before pressing button.
  */
 boolean powerButtonDetection() {
   
-  if ( isButtonInitedForInput() ) {
-    
-    // read the pin as it is configured for input
-    return digitalRead(POWER_SWITCH_PIN_POUT) == LOW; 
-  }  
-  
-  // can read the pin, 
-  return false;
+  digitalWrite(POWER_SWITCH_PIN_POUT,HIGH);
+  pinMode(POWER_SWITCH_PIN_POUT,INPUT_PULLUP);
+
+  // read the pin as it is configured for input
+  return digitalRead(POWER_SWITCH_PIN_POUT) == LOW; 
 }
 
 /**
@@ -1252,52 +1307,29 @@ boolean powerButtonDetection() {
  */
 void initiatePowerButtonPress(long dealybefore) {
   
-  if ( isButtonInitedForOutput() ) {
+  // DEBUG
+  DEBUG_PRINTF("Front Panel Power Button - Initiate");
 
-    // set the time to wait
-    dealybeforePressing = dealybefore;
+  // set the time to wait
+  dealybeforePressing = dealybefore;
 
-    // setup a timer to press the button  
-    timer.setVariableTimer(powerButtonCallback);
-  }
+  // setup a timer to press the button  
+  timer.setVariableTimer(powerButtonCallback);
 }
 
 //
 // PRIVATE ------------------
 //
 
-boolean isButtonInitedForInput() {
-
-  // if an output is happening cannot do an input
-  if ( powerbuttonMode == BUTTON_OUTPUT ) return false;
-
-  // if already doing input, dont need to re-init
-  if ( powerbuttonMode == BUTTON_INPUT ) return true;
-  
-  // initialise the pin for input
-  digitalWrite(POWER_SWITCH_PIN_POUT,HIGH);
-  pinMode(POWER_SWITCH_PIN_POUT,INPUT_PULLUP);
-  powerbuttonMode = BUTTON_INPUT;
-
-  return true;
-}
-
-boolean isButtonInitedForOutput() {
-
-  // if already output then already doing a button press, STOP HERE
-  if ( powerbuttonMode == BUTTON_OUTPUT ) return false;
-  
-  // then configure it for output
-  digitalWrite(POWER_SWITCH_PIN_POUT,HIGH);
-  pinMode(POWER_SWITCH_PIN_POUT,OUTPUT);
-  powerbuttonMode = BUTTON_OUTPUT;
-  
-  return true;
-}
-
 long powerButtonCallback(int state) {
   
   if (state==0) {
+    
+    // then configure it for output
+    digitalWrite(POWER_SWITCH_PIN_POUT,HIGH);
+    pinMode(POWER_SWITCH_PIN_POUT,OUTPUT);
+    //powerbuttonMode = BUTTON_OUTPUT;
+
     return dealybeforePressing;
 
   } else if (state==1) {
@@ -1305,14 +1337,20 @@ long powerButtonCallback(int state) {
     // Activate the PIN
     digitalWrite(POWER_SWITCH_PIN_POUT,LOW);
 
-    return THREE_HUNDRED_MILLIS;
+    // DEBUG
+    DEBUG_PRINTF("Front Panel Power Button - Depressed");
+
+    return ONE_HUNDRED_MILLIS;
     
   } else if (state==2) {  
     
-    // Clear the PIN and set back to input
+    // DEBUG
+    DEBUG_PRINTF("Front Panel Power Button - Released");
+
+    // initialise the pin for input
     digitalWrite(POWER_SWITCH_PIN_POUT,HIGH);
     pinMode(POWER_SWITCH_PIN_POUT,INPUT_PULLUP);
-    powerbuttonMode = BUTTON_INPUT;
+    //powerbuttonMode = BUTTON_INPUT;
     
     return 0L;
   }
@@ -1408,6 +1446,9 @@ void activateInverter() {
   initInverterBright();
 
   if (!inverterActive) {
+    
+    DEBUG_PRINTF("INVERTER Activated");
+      
     inverterActive = true;
     setInverterPWMBrightness();
   }
@@ -1421,6 +1462,9 @@ void deactivateInverter() {
   initInverterBright();
 
   if (inverterActive) {
+
+    DEBUG_PRINTF("INVERTER Deactivated");
+
     inverterActive = false;
     setInverterPWMBrightness();
   }
@@ -1582,7 +1626,7 @@ long dealybeforeSounding;
 void initiateTimedChime( long delayBefore ) {
   
    // DEBUG
-  DEBUG_PRINT("CHIME");
+  DEBUG_PRINTF("CHIME");
 }
 
 // PRIVATE ------------------
@@ -1593,15 +1637,28 @@ void initiateTimedChime( long delayBefore ) {
 // ------------------------------------
 //
 
+boolean psuIsActive = true;
+
 void activatePSU () {
-  digitalWrite(PSU_DEACTIVATE_POUT,LOW);
-  pinMode(PSU_DEACTIVATE_POUT,INPUT);
+
+  if ( ! psuIsActive ) {
+    digitalWrite(PSU_DEACTIVATE_POUT,LOW);
+    pinMode(PSU_DEACTIVATE_POUT,INPUT);
+    psuIsActive = true;
+    
+    DEBUG_PRINTF("PSU Activated");
+  }
 }
 
 void deactivatePSU () {
-  DEBUG_PRINT("Deactivate PSU Called");
-  pinMode(PSU_DEACTIVATE_POUT,OUTPUT);
-  digitalWrite(PSU_DEACTIVATE_POUT,HIGH);
+  
+  if ( psuIsActive ) {
+    pinMode(PSU_DEACTIVATE_POUT,OUTPUT);
+    digitalWrite(PSU_DEACTIVATE_POUT,HIGH);
+    psuIsActive = false;
+    
+    DEBUG_PRINTF("PSU Deactivated");
+  }
 }
 
 //
@@ -1790,18 +1847,18 @@ float computeFlash() {
  */
 float computeBreath(unsigned long timeInCycle) {
   
-  // how much time has elapsed in the 6 second breath cycle. 0 - 2
-  long timeInBreathCycle = timeInCycle % 5000;
+  // how much time has elapsed in the 5 second breath cycle.
+  long timeInBreathCycle = timeInCycle % FIVE_SECOND;
   
-  //float factor = 0.0f;
-  
+  // when in the first 1.5 seconds
   if ( timeInBreathCycle <= 1500 ) {
 
-    // simple cos roundng    
+    // simple cos function that ramps up    
     return computeTrigFactor( (float)timeInBreathCycle/1500.0f );
+    
   } else {
     
-    // convert to a decreasing value from 1 to 0
+    // convert to a decreasing value from 1 to 0, cos function raised to power 1.8
     return pow( computeTrigFactor((float)(5000-timeInBreathCycle)/3500.0f), 1.8f );
   }
 }
@@ -1976,46 +2033,9 @@ void processCommandSystem(String subCmd, String extraCmd) {
     Serial.print(F("Timers Unused "));
     Serial.println(timer.getNumAvailableTimers());    
 
-  } else if (subCmd.equals("I")) {
-    
-    static int sampleTimer = -1;
-    if (sampleTimer<0) {      
-      sampleTimer = timer.setInterval(2000,sampleInputs);
-    } else {
-      timer.deleteTimer(sampleTimer);
-      sampleTimer = -1;
-    }
-    
   } else {
-    Serial.println(F("System Command Unknown: R (ram), U (uptime), T (timers), I (input)"));
+    Serial.println(F("System Command Unknown: R (ram), U (uptime), T (timers)"));
   }
-}
-
-void sampleInputs() {
-  
-    static int counter=0;
-    if (counter++ %15==0) {
-      // Read System Inputs
-      Serial.println(F("Pow-St\tPow-But"));
-    }
-    
-    /*Serial.print(F("CapDNSensor\t"));
-    Serial.println(getDnSensorReading());
-    Serial.print(F("CapUPSensor\t"));
-    Serial.println(getUpSensorReading());
-    Serial.print(F("MainTemp\t"));
-    Serial.println(getTemp());
-    Serial.print(F("AmbientTemp\t"));
-    Serial.println(getAmbientTemp());
-    Serial.print(F("PowerState\t"));
-    Serial.println(powerState());
-    Serial.print(F("PowerButton\t"));
-    Serial.println(powerButtonDetection());*/
-    
-    Serial.print(powerState());
-    Serial.print("\t");
-    Serial.print(powerButtonDetection());
-    Serial.println();
 }
 
 //
