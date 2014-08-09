@@ -27,10 +27,8 @@
 #include <SimpleTimer.h>
 #include <FiniteStateMachine.h>
 #include <EEPROMex.h>
-<<<<<<< HEAD
-=======
 #include <EEPROMVar.h>
->>>>>>> FETCH_HEAD
+
 
 #ifndef DEBUG
 // while debugging cant afford extra overhead
