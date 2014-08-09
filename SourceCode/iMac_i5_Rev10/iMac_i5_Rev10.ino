@@ -19,7 +19,7 @@
  * Written : July 2014
  */
 
-//#define DEBUG
+#define DEBUG
 
 #include <DebugUtils.h>
 
@@ -27,17 +27,22 @@
 #include <SimpleTimer.h>
 #include <FiniteStateMachine.h>
 #include <EEPROMex.h>
+#include <EEPROMVar.h>
 
+#ifndef DEBUG
+// while debugging cant afford extra overhead
+// so these libraries are excluded
 #include <CapacitiveSensorDue.h>
 #include <OneWire.h>
 #include <DallasTemperature.h>
+#endif
 
 /**
  * The Libraries: DebugUtils, FSM, PWMFrequency, SimpleTimer can be obtained here
  * https://github.com/kiwisincebirth/Arduino/tree/master/Libraries
  *
  * And the following libraries come from here
- * EEPROMex - https://github.com/thijse/Arduino-Libraries/tree/master/EEPROMEx
+ * EEPROMEx - https://github.com/thijse/Arduino-Libraries/tree/master/EEPROMEx
  * CapacitiveSensorDue - https://github.com/arduino-libraries/CapacitiveSensor/tree/master/libraries
  * OneWire - http://www.pjrc.com/teensy/td_libs_OneWire.html
  * DallasTemperature - https://github.com/milesburton/Arduino-Temperature-Control-Library
@@ -554,7 +559,7 @@ void loopFiniteStateMachine() {
 void enterActiveMode() {
   
   // DEBUG
-  DEBUG_PRINT("ENTER-ACTIVE");
+  DEBUG_PRINTF("ENTER-ACTIVE");
 
   // TURN Basics On
   activatePSU(); // Ensure the ATX G5 PSU is active
@@ -605,7 +610,7 @@ void updateActiveMode() {
 void leaveActiveMode() {
   
   // DEBUG
-  DEBUG_PRINT("LEAVE-ACTIVE");
+  DEBUG_PRINTF("LEAVE-ACTIVE");
 
   // Turn off Fans,and LCD
   deactivateInverter();
@@ -620,7 +625,7 @@ void leaveActiveMode() {
 void enterSleepMode() {
 
   // DEBUG
-  DEBUG_PRINT("ENTER-SLEEP");
+  DEBUG_PRINTF("ENTER-SLEEP");
 
   activateFrontPanelLEDBreath();
 }
@@ -639,16 +644,18 @@ void updateSleepMode() {
 void leaveSleepMode() {
 
   // DEBUG
-  DEBUG_PRINT("LEAVE-ACTIVE");
+  DEBUG_PRINTF("LEAVE-ACTIVE");
 }
 
+//
 // POWER DOWN STATE - STATE_POWERDOWN
 // Occurs When CPU shuts down.
+//
 
 void enterPowerDownMode() {
 
   // DEBUG
-  DEBUG_PRINT("ENTER-PWR-DN");
+  DEBUG_PRINTF("ENTER-PWR-DN");
  
   // Enable 30 second power down led effect
   activateFrontPanelLEDRampDn(THIRTY_SECOND);
@@ -668,7 +675,7 @@ void updatePowerDownMode() {
   if ( fsm.timeInCurrentState() >= THIRTY_SECOND) {
     
     // DEBUG
-    DEBUG_PRINT("LeavePwrDnForInactive30Sec");
+    DEBUG_PRINTF("Powered Down for 30 Seconds -> Inactive");
   
     // if 30 seconds have been reached Transition to Inactive Mode
     fsm.transitionTo(STATE_INACTIVE);    
@@ -687,7 +694,7 @@ void updatePowerDownMode() {
 void leavePowerDownMode() {
 
   // DEBUG
-  DEBUG_PRINT("LEAVE-ACTIVE");
+  DEBUG_PRINTF("LEAVE-PWR-DN");
 }
 
 //
@@ -698,7 +705,7 @@ void leavePowerDownMode() {
 void enterInactiveMode() {
   
   // DEBUG
-  DEBUG_PRINT("ENTER-INACTIVE");
+  DEBUG_PRINTF("ENTER-INACTIVE");
  
   // Turn everything Off.
   deactivateFrontPanelLED(); 
@@ -709,6 +716,10 @@ void updateInactiveMode() {
 
   // Was a PWr button detected, then power up
   if ( powerButtonDetection() ) {
+
+    // DEBUG
+    DEBUG_PRINTF("Front Panel Power Button Detected -> PowerUp");
+
     fsm.transitionTo(STATE_POWERUP);
   }
 }
@@ -716,11 +727,12 @@ void updateInactiveMode() {
 void leaveInactiveMode() {
 
   // DEBUG
-  DEBUG_PRINT("LEAVE-INACTIVE");
+  DEBUG_PRINTF("LEAVE-INACTIVE");
 
   // Make sure PSU is turned back on
   activatePSU();
   
+  // curtosy showing user action
   activateFrontPanelFlash(1);
 }
 
@@ -735,7 +747,7 @@ byte powerupeventsequence = 1;
 void enterPowerUpMode() {
 
   // DEBUG
-  DEBUG_PRINT("ENTER-PWR-UP");
+  DEBUG_PRINTF("ENTER-PWR-UP");
 
   // wait a short time and press the PWR button, ie wait for pwr to come up
   initiatePowerButtonPress( FIVE_HUNDRED_MILLIS );
@@ -753,7 +765,7 @@ void updatePowerUpMode() {
   if ( fsm.timeInCurrentState() >= TEN_SECOND) {
     
     // DEBUG
-    DEBUG_PRINT("LeavePwrUpForInactive10Sec");
+    DEBUG_PRINTF("Powered Up for 10 Seconds -> Inactive");
 
     // The NUC failes to power on, so shutdown again.
     fsm.transitionTo(STATE_INACTIVE);    
@@ -764,15 +776,24 @@ void updatePowerUpMode() {
     // it does some extra things, not done from subsequnt WARM boots.
     // We need to track this so FSM doesnt get confused latter on.
     
+    // DEBUG
+    DEBUG_PRINTF("S0 -> Sequence 2");
+
     // from a COLD boot the LED flashes ONCE, comes on (S0)
     powerupeventsequence = 2;
 
   } else if ( powerupeventsequence == 2 && powerS5() ) {
 
+    // DEBUG
+    DEBUG_PRINTF("S5 -> Sequence 3");
+
     // from a COLD boot the LED flashes ONCE, ie then turns off (S5)
     powerupeventsequence = 3;
     
   } else if ( powerupeventsequence == 3 && powerS0() ) {
+
+    // DEBUG
+    DEBUG_PRINTF("S0 -> Active");
 
     // then ther is a second or so delay 
     // when the PWR light comes back on (S0) NUC is active
@@ -784,7 +805,7 @@ void updatePowerUpMode() {
 
 void leavePowerUpMode() {
   // DEBUG
-  DEBUG_PRINT("LEAVE-PWR-UP");
+  DEBUG_PRINTF("LEAVE-PWR-UP");
 }
 
 //
@@ -1036,12 +1057,6 @@ float computeTempFactor( float temp ) {
 // -----------------------
 //
 
-// 1M resistor between pins 4 & 2, pin 2 is sensor pin
-CapacitiveSensorDue dnSensor = CapacitiveSensorDue(TOUCH_COMMON_PIN_CAP,TOUCH_DOWN_PIN_CAP);	
-
-// 1M resistor between pins 4 & 6, pin 6 is sensor pin
-CapacitiveSensorDue upSensor = CapacitiveSensorDue(TOUCH_COMMON_PIN_CAP,TOUCH_UP_PIN_CAP);	
-
 /**
  * Have we got a positive DOWN sensor reading
  */
@@ -1055,6 +1070,21 @@ boolean isDnSensorReadingOverThreshold() {
 boolean isUpSensorReadingOverThreshold() {
   return getUpSensorReading() > eepromRead(EEP_UP_CAP_THR);
 }
+
+// while debugging cant afford extra overhead
+#ifdef DEBUG
+
+long getDnSensorReading    () { return 0; }
+long getUpSensorReading    () { return 0; }
+void calibrateSensorReading() { }
+
+#else
+
+// 1M resistor between pins 4 & 2, pin 2 is sensor pin
+CapacitiveSensorDue dnSensor = CapacitiveSensorDue(TOUCH_COMMON_PIN_CAP,TOUCH_DOWN_PIN_CAP);	
+
+// 1M resistor between pins 4 & 6, pin 6 is sensor pin
+CapacitiveSensorDue upSensor = CapacitiveSensorDue(TOUCH_COMMON_PIN_CAP,TOUCH_UP_PIN_CAP);	
 
 /**
  * Read The Down sensor directly
@@ -1075,11 +1105,20 @@ void calibrateSensorReading() {
   dnSensor.calibrate();
 }
 
+#endif
+
 //
 // ----------
 // TEMP INPUT
 // ----------
 //
+
+#ifdef DEBUG
+
+float getTempDiff()    { return 5; }
+float getAmbientTemp() { return 20; }
+  
+#else
 
 float ambient_temp = DEVICE_DISCONNECTED_C;
 
@@ -1122,6 +1161,8 @@ float getAmbientTemp() {
   
   return ambient_temp;
 }
+
+#endif
 
 //
 // -----------------------------
@@ -1192,8 +1233,12 @@ byte powerState() {
   // if the last observered value different to last reported
   // and sufficient time has exceeded (say 10ms) 
   if ( lastObservered != reportedState && firstObservervedWhen-millis() > FIFTY_MILLIS ) {
+    
     // then we can set the last observered value is probably final so
     reportedState = lastObservered;
+
+    // DEBUG
+    DEBUG_PRINT("POWER-STATE Reported S"+reportedState);
   }
   
   // return the reported state, with 50ms delay to confirm the reading.
@@ -1317,14 +1362,23 @@ long powerButtonCallback(int state) {
     // Activate the PIN
     digitalWrite(POWER_SWITCH_PIN_POUT,LOW);
 
+    // DEBUG
+    DEBUG_PRINTF("Front Panel Power Button - Depressed");
+
     return THREE_HUNDRED_MILLIS;
     
   } else if (state==2) {  
     
-    // Clear the PIN and set back to input
     digitalWrite(POWER_SWITCH_PIN_POUT,HIGH);
-    pinMode(POWER_SWITCH_PIN_POUT,INPUT_PULLUP);
-    powerbuttonMode = BUTTON_INPUT;
+
+    // DEBUG
+    DEBUG_PRINTF("Front Panel Power Button - Released");
+
+    // Clear the PIN and set back to input
+    powerbuttonMode == BUTTON_NOT_INITED
+    
+    // setting it back to input
+    isButtonInitedForInput();
     
     return 0L;
   }
@@ -1420,6 +1474,9 @@ void activateInverter() {
   initInverterBright();
 
   if (!inverterActive) {
+    
+    DEBUG_PRINTF("INVERTER Activated");
+      
     inverterActive = true;
     setInverterPWMBrightness();
   }
@@ -1433,6 +1490,9 @@ void deactivateInverter() {
   initInverterBright();
 
   if (inverterActive) {
+
+    DEBUG_PRINTF("INVERTER Deactivated");
+
     inverterActive = false;
     setInverterPWMBrightness();
   }
@@ -1594,7 +1654,7 @@ long dealybeforeSounding;
 void initiateTimedChime( long delayBefore ) {
   
    // DEBUG
-  DEBUG_PRINT("CHIME");
+  DEBUG_PRINTF("CHIME");
 }
 
 // PRIVATE ------------------
@@ -1606,12 +1666,17 @@ void initiateTimedChime( long delayBefore ) {
 //
 
 void activatePSU () {
+
+  DEBUG_PRINTF("PSU Activated");
+  
   digitalWrite(PSU_DEACTIVATE_POUT,LOW);
   pinMode(PSU_DEACTIVATE_POUT,INPUT);
 }
 
 void deactivatePSU () {
-  DEBUG_PRINT("Deactivate PSU Called");
+  
+  DEBUG_PRINTF("PSU Deactivated");
+  
   pinMode(PSU_DEACTIVATE_POUT,OUTPUT);
   digitalWrite(PSU_DEACTIVATE_POUT,HIGH);
 }
