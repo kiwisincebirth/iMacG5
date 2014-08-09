@@ -12,23 +12,36 @@
  * by MacTester in his excellent iMac creations
  *
  * See : http://www.tonymacx86.com/imac-mods/107859-kiwis-next-project-imac-g5.html
+ * Source Repository : https://github.com/kiwisincebirth/iMacG5/tree/master/SourceCode
  * Platform : Arduino Leonardo ATMega32U4
  * Author : KiwiSinceBirth
  * Contributions : MacTester (capacitance)
- * Written : February 2014
+ * Written : July 2014
  */
 
 //#define DEBUG
+
 #include <DebugUtils.h>
 
 #include <PWMFrequency.h>
 #include <SimpleTimer.h>
 #include <FiniteStateMachine.h>
-#include <EEPROMEx.h>
+#include <EEPROMex.h>
 
 #include <CapacitiveSensorDue.h>
 #include <OneWire.h>
 #include <DallasTemperature.h>
+
+/**
+ * The Libraries: DebugUtils, FSM, PWMFrequency, SimpleTimer can be obtained here
+ * https://github.com/kiwisincebirth/Arduino/tree/master/Libraries
+ *
+ * And the following libraries come from here
+ * EEPROMex - https://github.com/thijse/Arduino-Libraries/tree/master/EEPROMEx
+ * CapacitiveSensorDue - https://github.com/arduino-libraries/CapacitiveSensor/tree/master/libraries
+ * OneWire - http://www.pjrc.com/teensy/td_libs_OneWire.html
+ * DallasTemperature - https://github.com/milesburton/Arduino-Temperature-Control-Library
+ */
 
 // Some Time Constants
 #define ZERO 0
@@ -1789,18 +1802,18 @@ float computeFlash() {
  */
 float computeBreath(unsigned long timeInCycle) {
   
-  // how much time has elapsed in the 6 second breath cycle. 0 - 2
-  long timeInBreathCycle = timeInCycle % 5000;
+  // how much time has elapsed in the 5 second breath cycle.
+  long timeInBreathCycle = timeInCycle % FIVE_SECOND;
   
-  //float factor = 0.0f;
-  
+  // when in the first 1.5 seconds
   if ( timeInBreathCycle <= 1500 ) {
 
-    // simple cos roundng    
+    // simple cos function that ramps up    
     return computeTrigFactor( (float)timeInBreathCycle/1500.0f );
+    
   } else {
     
-    // convert to a decreasing value from 1 to 0
+    // convert to a decreasing value from 1 to 0, cos function raised to power 1.8
     return pow( computeTrigFactor((float)(5000-timeInBreathCycle)/3500.0f), 1.8f );
   }
 }
