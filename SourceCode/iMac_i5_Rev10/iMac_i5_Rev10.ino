@@ -24,7 +24,7 @@
 #include <PWMFrequency.h>
 #include <SimpleTimer.h>
 #include <FiniteStateMachine.h>
-#include <EEPROMEx.h>
+#include <EEPROMex.h>
 
 #include <CapacitiveSensorDue.h>
 #include <OneWire.h>
@@ -40,6 +40,7 @@
 #define TWO_HUNDRED_MILLIS 200
 #define THREE_HUNDRED_MILLIS 300
 #define FIVE_HUNDRED_MILLIS 500
+#define SEVEN_HUNDRED_MILLIS 700
 #define ONE_SECOND 1000
 #define TWO_SECOND 2000
 #define FIVE_SECOND 5000
