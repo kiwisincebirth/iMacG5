@@ -12,6 +12,7 @@ The software (and hardware) provide System management function including
  * Control of screen Brightnes via Mac Menu application (via USB serial)
  * Fan Speed Control from internal temperature monitoring
  * Front Panel LED and Power Switch control
+
 This repository contains
  * The full Bill of Materials for the Hardware
  * The source code for Arduino microcontroller
