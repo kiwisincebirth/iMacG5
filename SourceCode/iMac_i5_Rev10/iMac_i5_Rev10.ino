@@ -996,22 +996,27 @@ void processCommandFan(String subCmd, String extraCmd) {
   
   if (subCmd.equals("A")) {
     activateTempFanControl();
-    Serial.print(F("Fans Enabled = "));
+    Serial.print(F("Fans Enabled"));
     Serial.println(timer.isEnabled(tempFanControlTimer));
 
   } else if (subCmd.equals("D")) {
     deactivateTempFanControl();
-    Serial.print(F("Fans Enabled = "));
+    Serial.print(F("Fans Set To Min"));
     Serial.println(timer.isEnabled(tempFanControlTimer));
 
   } else if (subCmd.equals("M")) {
+    deactivateTempFanControl();
+    Serial.print(F("Fans Set To Max"));
+    setFanTargetVolt( 12.0f ); // MAXIMUM FANS
+
+  } else if (subCmd.equals("L")) {
     activateTempFanMonitor();
     
-  } else if (subCmd.equals("N")) {
+  } else if (subCmd.equals("O")) {
     deactivateTempFanMonitor();
 
   } else {
-    Serial.println(F("Fan Command Unknown: FA (activate), FD (deactivate), FM (monitor), FN (monitor off)"));
+    Serial.println(F("Fan Command Unknown: FM (max), FA (activate), FD (deactivate), FL (log), FO (log off)"));
   }  
 }
 
@@ -1050,17 +1055,21 @@ float computeTempFactor( float temp ) {
 // PRIVATE ------------------- MONITORING INFO
 
 void printFanDetails() {
-    Serial.print(timer.isEnabled(tempFanControlTimer));
-    Serial.print(F("\t"));
     Serial.print(getAmbientTemp());
     Serial.print(F("\t"));
     Serial.print(getTempDiff());
     Serial.print(F("\t"));
     Serial.print(getFanTargetVolt());
     Serial.print(F("\t"));
+    Serial.print(readVoltage(FAN_OUTPUT_AIN) * 2.0); // Current Voltage
+    Serial.print(F("\t"));
+    Serial.print(getCurrentPWM()); // Current PWM
+    Serial.print(F("\t"));
     Serial.print(getFanRPM1());
     Serial.print(F("\t"));
     Serial.print(getFanRPM2());
+    Serial.println();
+    
 }
 
 int tempFanMonitorTimer = -1;
@@ -1071,34 +1080,28 @@ volatile long fan2RotationCount;
 volatile unsigned long fan2TimeStart;
 
 void interrupFan1() {
-  if (fan1RotationCount == 0 ) {
-    fan1TimeStart == millis();
-  }
   fan1RotationCount ++;
 }
 
 void interrupFan2() {
-  if (fan2RotationCount == 0 ) {
-    fan2TimeStart == millis();
-  }
   fan2RotationCount ++;
 }
 
 int getFanRPM1() {
-  if ( fan1RotationCount<1 ) return 0;
-  cli();
-  int ret = fan1RotationCount * 1000L * 60L / ( millis() - fan1TimeStart );
-  fan1RotationCount = -1;
-  sei();
+  //if ( fan1RotationCount ) return 0;
+  double ret = fan1RotationCount /2L *1000L * 60L / ( millis() - fan1TimeStart );
+  //fan1RotationCount = -1;
+  fan1RotationCount = 0;
+  fan1TimeStart = millis();
   return  ret;
 }
 
 int getFanRPM2() {
-  if ( fan2RotationCount<1 ) return 0;
-  cli();
-  int ret = fan2RotationCount * 1000L * 60L / ( millis() - fan2TimeStart );
-  fan2RotationCount = -1;
-  sei();
+  //if ( fan2RotationCount<1 ) return 0;
+  double ret = fan2RotationCount /2L * 1000L * 60L / ( millis() - fan2TimeStart );
+  //fan2RotationCount = -1;
+  fan2RotationCount = 0;
+  fan2TimeStart = millis();
   return  ret;
 }
 
@@ -1107,23 +1110,26 @@ int getFanRPM2() {
  */
 void activateTempFanMonitor() {
   
-  fan1RotationCount = -1;
-  fan2RotationCount = -1;
+  fan1RotationCount = 0;
+  fan2RotationCount = 0;
+  fan1TimeStart = millis();
+  fan2TimeStart = millis();
 
-  if ( tempFanMonitorTimer >= 0 ) { 
+  if ( tempFanMonitorTimer == -1 ) { 
     
-    // make sure the Timer Thread is active
-    timer.enable(tempFanMonitorTimer);
-    
-  } else {
-   
+    pinMode(0,INPUT_PULLUP);    
+    pinMode(1,INPUT_PULLUP);    
+
     // interrupts
     attachInterrupt(2,interrupFan1,FALLING);
     attachInterrupt(3,interrupFan2,FALLING);
     
     // setup a timer that runs every 500 ms - To Read Temperature
-    tempFanMonitorTimer = timer.setInterval(TWO_SECOND,printFanDetails);
+    tempFanMonitorTimer = timer.setInterval(3000,printFanDetails);
   }
+
+  // make sure the Timer Thread is active
+  timer.enable(tempFanMonitorTimer);    
 }
 
 /**
@@ -1675,10 +1681,17 @@ void initFanVoltControl() {
   fanVoltageControlTimer = timer.setInterval(FIFTY_MILLIS,readVoltSetFanPWM);
 }
 
+// Roughly is equal to 3.3v NOTE Cannot be computed
+byte currentPWM = 150; 
+
+byte getCurrentPWM() {
+  return currentPWM;
+}
+
 void readVoltSetFanPWM() {
   
   // Roughly is equal to 3.3v NOTE Cannot be computed
-  static byte currentPWM = 150; 
+  //byte currentPWM = 150; 
 
   // target PWM if fans are not active
   float currentVolt = readVoltage(FAN_OUTPUT_AIN) * 2.0;
