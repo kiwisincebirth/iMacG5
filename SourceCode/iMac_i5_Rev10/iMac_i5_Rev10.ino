@@ -122,7 +122,11 @@
 // D0 RXi Unused
 
 // Chime Output Connected to PLAYE, high going Level.
-const byte CHIME_POUT = 0; // TXO
+//const byte CHIME_POUT = 0; // TXO
+
+// The Pins For Fan Input
+const byte FAN1_PWM_PIN = 0; 
+const byte FAN2_PWM_PIN = 1; 
 
 // Power Switch Control Pins
 const byte POWER_SWITCH_PIN_POUT = 3; 
@@ -1000,18 +1004,14 @@ void processCommandFan(String subCmd, String extraCmd) {
     Serial.print(F("Fans Enabled = "));
     Serial.println(timer.isEnabled(tempFanControlTimer));
 
-  } else if (subCmd.equals("I")) {
-    Serial.print(F("Enabled   = "));
-    Serial.println(timer.isEnabled(tempFanControlTimer));
-    Serial.print(F("TempDiff  = "));
-    Serial.println(getTempDiff());
-    Serial.print(F("Ambient   = "));
-    Serial.println(getAmbientTemp());
-    Serial.print(F("TargetVolt= "));
-    Serial.println(getFanTargetVolt());
+  } else if (subCmd.equals("M")) {
+    activateTempFanMonitor();
     
+  } else if (subCmd.equals("N")) {
+    deactivateTempFanMonitor();
+
   } else {
-    Serial.println(F("Fan Command Unknown: FA (activate), FD (deactivate), FI (info)"));
+    Serial.println(F("Fan Command Unknown: FA (activate), FD (deactivate), FM (monitor), FN (monitor off)"));
   }  
 }
 
@@ -1045,6 +1045,94 @@ float computeTempFactor( float temp ) {
   float tempFactor = ( temp-minTemp ) / ( maxTemp-minTemp ); 
   
   return computeTrigFactor(tempFactor);
+}
+
+// PRIVATE ------------------- MONITORING INFO
+
+void printFanDetails() {
+    Serial.print(timer.isEnabled(tempFanControlTimer));
+    Serial.print(F("\t"));
+    Serial.print(getAmbientTemp());
+    Serial.print(F("\t"));
+    Serial.print(getTempDiff());
+    Serial.print(F("\t"));
+    Serial.print(getFanTargetVolt());
+    Serial.print(F("\t"));
+    Serial.print(getFanRPM1());
+    Serial.print(F("\t"));
+    Serial.print(getFanRPM2());
+}
+
+int tempFanMonitorTimer = -1;
+
+volatile long fan1RotationCount;
+volatile unsigned long fan1TimeStart;
+volatile long fan2RotationCount;
+volatile unsigned long fan2TimeStart;
+
+void interrupFan1() {
+  if (fan1RotationCount == 0 ) {
+    fan1TimeStart == millis();
+  }
+  fan1RotationCount ++;
+}
+
+void interrupFan2() {
+  if (fan2RotationCount == 0 ) {
+    fan2TimeStart == millis();
+  }
+  fan2RotationCount ++;
+}
+
+int getFanRPM1() {
+  if ( fan1RotationCount<1 ) return 0;
+  cli();
+  int ret = fan1RotationCount * 1000L * 60L / ( millis() - fan1TimeStart );
+  fan1RotationCount = -1;
+  sei();
+  return  ret;
+}
+
+int getFanRPM2() {
+  if ( fan2RotationCount<1 ) return 0;
+  cli();
+  int ret = fan2RotationCount * 1000L * 60L / ( millis() - fan2TimeStart );
+  fan2RotationCount = -1;
+  sei();
+  return  ret;
+}
+
+/**
+ * Activate the controller, and set the fan speed based on Temperature
+ */
+void activateTempFanMonitor() {
+  
+  fan1RotationCount = -1;
+  fan2RotationCount = -1;
+
+  if ( tempFanMonitorTimer >= 0 ) { 
+    
+    // make sure the Timer Thread is active
+    timer.enable(tempFanMonitorTimer);
+    
+  } else {
+   
+    // interrupts
+    attachInterrupt(2,interrupFan1,FALLING);
+    attachInterrupt(3,interrupFan2,FALLING);
+    
+    // setup a timer that runs every 500 ms - To Read Temperature
+    tempFanMonitorTimer = timer.setInterval(TWO_SECOND,printFanDetails);
+  }
+}
+
+/**
+ * Deactive the controller, and turn the fans off
+ */
+void deactivateTempFanMonitor() {
+
+  // disable the timer if it exists
+  if (tempFanMonitorTimer >=0 ) timer.disable(tempFanMonitorTimer);  
 }
 
 
