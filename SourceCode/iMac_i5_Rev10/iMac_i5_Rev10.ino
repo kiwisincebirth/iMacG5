@@ -124,9 +124,17 @@
 // Chime Output Connected to PLAYE, high going Level.
 //const byte CHIME_POUT = 0; // TXO
 
+// ---------------------- FAN SPEED PINS
+
 // The Pins For Fan Input
 const byte FAN1_PWM_PIN = 0; 
 const byte FAN2_PWM_PIN = 1; 
+
+// Interrupts that fans are attached to.
+const byte FAN1_INTERRUPT = 2; 
+const byte FAN2_INTERRUPT = 3; 
+
+// -------------- POWER DETECTION CONTROL
 
 // Power Switch Control Pins
 const byte POWER_SWITCH_PIN_POUT = 3; 
@@ -1110,23 +1118,23 @@ int getFanRPM2() {
  */
 void activateTempFanMonitor() {
   
-  fan1RotationCount = 0;
-  fan2RotationCount = 0;
-  fan1TimeStart = millis();
-  fan2TimeStart = millis();
-
   if ( tempFanMonitorTimer == -1 ) { 
     
-    pinMode(0,INPUT_PULLUP);    
-    pinMode(1,INPUT_PULLUP);    
+    pinMode(FAN1_PWM_PIN,INPUT_PULLUP);    
+    pinMode(FAN2_PWM_PIN,INPUT_PULLUP);    
 
     // interrupts
-    attachInterrupt(2,interrupFan1,FALLING);
-    attachInterrupt(3,interrupFan2,FALLING);
+    attachInterrupt(FAN1_INTERRUPT,interrupFan1,FALLING);
+    attachInterrupt(FAN2_INTERRUPT,interrupFan2,FALLING);
     
     // setup a timer that runs every 500 ms - To Read Temperature
     tempFanMonitorTimer = timer.setInterval(3000,printFanDetails);
   }
+
+  fan1RotationCount = 0;
+  fan2RotationCount = 0;
+  fan1TimeStart = millis();
+  fan2TimeStart = millis();
 
   // make sure the Timer Thread is active
   timer.enable(tempFanMonitorTimer);    
