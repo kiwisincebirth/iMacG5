@@ -122,7 +122,19 @@
 // D0 RXi Unused
 
 // Chime Output Connected to PLAYE, high going Level.
-const byte CHIME_POUT = 0; // TXO
+//const byte CHIME_POUT = 0; // TXO
+
+// ---------------------- FAN SPEED PINS
+
+// The Pins For Fan Input
+const byte FAN1_PWM_PIN = 0; 
+const byte FAN2_PWM_PIN = 1; 
+
+// Interrupts that fans are attached to.
+const byte FAN1_INTERRUPT = 2; 
+const byte FAN2_INTERRUPT = 3; 
+
+// -------------- POWER DETECTION CONTROL
 
 // Power Switch Control Pins
 const byte POWER_SWITCH_PIN_POUT = 3; 
@@ -992,26 +1004,27 @@ void processCommandFan(String subCmd, String extraCmd) {
   
   if (subCmd.equals("A")) {
     activateTempFanControl();
-    Serial.print(F("Fans Enabled = "));
+    Serial.print(F("Fans Enabled"));
     Serial.println(timer.isEnabled(tempFanControlTimer));
 
   } else if (subCmd.equals("D")) {
     deactivateTempFanControl();
-    Serial.print(F("Fans Enabled = "));
+    Serial.print(F("Fans Set To Min"));
     Serial.println(timer.isEnabled(tempFanControlTimer));
 
-  } else if (subCmd.equals("I")) {
-    Serial.print(F("Enabled   = "));
-    Serial.println(timer.isEnabled(tempFanControlTimer));
-    Serial.print(F("TempDiff  = "));
-    Serial.println(getTempDiff());
-    Serial.print(F("Ambient   = "));
-    Serial.println(getAmbientTemp());
-    Serial.print(F("TargetVolt= "));
-    Serial.println(getFanTargetVolt());
+  } else if (subCmd.equals("M")) {
+    deactivateTempFanControl();
+    Serial.print(F("Fans Set To Max"));
+    setFanTargetVolt( 12.0f ); // MAXIMUM FANS
+
+  } else if (subCmd.equals("L")) {
+    activateTempFanMonitor();
     
+  } else if (subCmd.equals("O")) {
+    deactivateTempFanMonitor();
+
   } else {
-    Serial.println(F("Fan Command Unknown: FA (activate), FD (deactivate), FI (info)"));
+    Serial.println(F("Fan Command Unknown: FM (max), FA (activate), FD (deactivate), FL (log), FO (log off)"));
   }  
 }
 
@@ -1045,6 +1058,95 @@ float computeTempFactor( float temp ) {
   float tempFactor = ( temp-minTemp ) / ( maxTemp-minTemp ); 
   
   return computeTrigFactor(tempFactor);
+}
+
+// PRIVATE ------------------- MONITORING INFO
+
+void printFanDetails() {
+    Serial.print(getAmbientTemp());
+    Serial.print(F("\t"));
+    Serial.print(getTempDiff());
+    Serial.print(F("\t"));
+    Serial.print(getFanTargetVolt());
+    Serial.print(F("\t"));
+    Serial.print(readVoltage(FAN_OUTPUT_AIN) * 2.0); // Current Voltage
+    Serial.print(F("\t"));
+    Serial.print(getCurrentPWM()); // Current PWM
+    Serial.print(F("\t"));
+    Serial.print(getFanRPM1());
+    Serial.print(F("\t"));
+    Serial.print(getFanRPM2());
+    Serial.println();
+    
+}
+
+int tempFanMonitorTimer = -1;
+
+volatile long fan1RotationCount;
+volatile unsigned long fan1TimeStart;
+volatile long fan2RotationCount;
+volatile unsigned long fan2TimeStart;
+
+void interrupFan1() {
+  fan1RotationCount ++;
+}
+
+void interrupFan2() {
+  fan2RotationCount ++;
+}
+
+int getFanRPM1() {
+  //if ( fan1RotationCount ) return 0;
+  double ret = fan1RotationCount /2L *1000L * 60L / ( millis() - fan1TimeStart );
+  //fan1RotationCount = -1;
+  fan1RotationCount = 0;
+  fan1TimeStart = millis();
+  return  ret;
+}
+
+int getFanRPM2() {
+  //if ( fan2RotationCount<1 ) return 0;
+  double ret = fan2RotationCount /2L * 1000L * 60L / ( millis() - fan2TimeStart );
+  //fan2RotationCount = -1;
+  fan2RotationCount = 0;
+  fan2TimeStart = millis();
+  return  ret;
+}
+
+/**
+ * Activate the controller, and set the fan speed based on Temperature
+ */
+void activateTempFanMonitor() {
+  
+  if ( tempFanMonitorTimer == -1 ) { 
+    
+    pinMode(FAN1_PWM_PIN,INPUT_PULLUP);    
+    pinMode(FAN2_PWM_PIN,INPUT_PULLUP);    
+
+    // interrupts
+    attachInterrupt(FAN1_INTERRUPT,interrupFan1,FALLING);
+    attachInterrupt(FAN2_INTERRUPT,interrupFan2,FALLING);
+    
+    // setup a timer that runs every 500 ms - To Read Temperature
+    tempFanMonitorTimer = timer.setInterval(3000,printFanDetails);
+  }
+
+  fan1RotationCount = 0;
+  fan2RotationCount = 0;
+  fan1TimeStart = millis();
+  fan2TimeStart = millis();
+
+  // make sure the Timer Thread is active
+  timer.enable(tempFanMonitorTimer);    
+}
+
+/**
+ * Deactive the controller, and turn the fans off
+ */
+void deactivateTempFanMonitor() {
+
+  // disable the timer if it exists
+  if (tempFanMonitorTimer >=0 ) timer.disable(tempFanMonitorTimer);  
 }
 
 
@@ -1587,10 +1689,17 @@ void initFanVoltControl() {
   fanVoltageControlTimer = timer.setInterval(FIFTY_MILLIS,readVoltSetFanPWM);
 }
 
+// Roughly is equal to 3.3v NOTE Cannot be computed
+byte currentPWM = 150; 
+
+byte getCurrentPWM() {
+  return currentPWM;
+}
+
 void readVoltSetFanPWM() {
   
   // Roughly is equal to 3.3v NOTE Cannot be computed
-  static byte currentPWM = 150; 
+  //byte currentPWM = 150; 
 
   // target PWM if fans are not active
   float currentVolt = readVoltage(FAN_OUTPUT_AIN) * 2.0;
