@@ -26,6 +26,7 @@
 #include <PWMFrequency.h>
 #include <SimpleTimer.h>
 #include <FiniteStateMachine.h>
+//#include <EEPROM.h>
 #include <EEPROMex.h>
 #include <EEPROMVar.h>
 
@@ -216,29 +217,50 @@ const byte EEP_VERSION = 0;
 //
 
 const byte EEP_BRIGHT = 1; // brghtness Setting 0 - 100 %
-const byte EEP_MIN_BRIGHT = 2; // Minimum PWM for Inverter - When Brihhtness is 0%
-const byte EEP_MAX_BRIGHT = 3; // Maximum PWM for Inverter - When Brightness is 100%
-const byte EEP_BRIGHT_INC = 4; // Number of percent brightness Increased or decreased
-const byte EEP_MIN_TEMP = 5; // Fan Control to Map Temp to Voltage
-const byte EEP_MAX_TEMP = 6; // Fan Control to Map Temp to Voltage
-const byte EEP_MIN_VOLT = 7; // Fan Control to Map Temp to Voltage
-const byte EEP_MAX_VOLT = 8; // Fan Control to Map Temp to Voltage
-const byte EEP_DN_CAP_THR = 9; // Capacatance Treshold for Down Button
-const byte EEP_UP_CAP_THR = 10; // Capacatance Treshold for Up Button
-const byte EEP_CAP_SAMPLE = 11; // Number of Samples for Capacatance
-const byte EEP_DEPRECATED1 = 12; // The Old Model ID of the project this board implements
-const byte EEP_MIN_LED_PWM = 13; // Minimum PWM Value for Front Panel LED Effects
-const byte EEP_MAX_LED_PWM = 14; // Maximum PWM Value for Front Panel LED Effects
-const byte EEP_INVERTER_STARTUP_DELAY = 15; // milliseconds before starting inverter 
-const byte EEP_CAP_CONTROL = 16; // is the capacatace controller enabled 
-const byte EEP_FAN_CONTROL = 17; // is the fan temp controller enabled  
-const byte EEP_INVERTER_WARM_DELAY = 18; // milliseconds before starting inverter 
+const byte EEP_CYC_SMC = 2; // SMC Power / Rest Cycles (StartUp)
+const byte EEP_CYC_POWER = 3; // CPU Power Cycles (Power Up)
+const byte EEP_CYC_SLEEP = 4; // CPU Sleep Cycles (Wake)
+
+const byte EEP_RESERVED0 = 5; 
+const byte EEP_RESERVED1 = 6; 
+const byte EEP_RESERVED2 = 7; 
+const byte EEP_RESERVED3 = 8; 
+const byte EEP_RESERVED4 = 9; 
+const byte EEP_RESERVED5 = 10; 
+const byte EEP_RESERVED6 = 11; 
+const byte EEP_RESERVED7 = 12; 
+const byte EEP_RESERVED8 = 13; 
+const byte EEP_RESERVED9 = 14; 
+const byte EEP_RESERVEDA = 15; 
+
+const byte EEP_MIN_BRIGHT = 16; // Minimum PWM for Inverter - When Brihhtness is 0%
+const byte EEP_MAX_BRIGHT = 17; // Maximum PWM for Inverter - When Brightness is 100%
+const byte EEP_BRIGHT_INC = 18; // Number of percent brightness Increased or decreased
+const byte EEP_MIN_TEMP = 19; // Fan Control to Map Temp to Voltage
+const byte EEP_MAX_TEMP = 20; // Fan Control to Map Temp to Voltage
+const byte EEP_MIN_VOLT = 21; // Fan Control to Map Temp to Voltage
+const byte EEP_MAX_VOLT = 22; // Fan Control to Map Temp to Voltage
+const byte EEP_DN_CAP_THR = 23; // Capacatance Treshold for Down Button
+const byte EEP_UP_CAP_THR = 24; // Capacatance Treshold for Up Button
+const byte EEP_CAP_SAMPLE = 25; // Number of Samples for Capacatance
+const byte EEP_DEPRECATED1 = 26; // The Old Model ID of the project this board implements
+const byte EEP_MIN_LED_PWM = 27; // Minimum PWM Value for Front Panel LED Effects
+const byte EEP_MAX_LED_PWM = 28; // Maximum PWM Value for Front Panel LED Effects
+const byte EEP_INVERTER_STARTUP_DELAY = 29; // milliseconds before starting inverter 
+const byte EEP_CAP_CONTROL = 30; // is the capacatace controller enabled 
+const byte EEP_FAN_CONTROL = 31; // is the fan temp controller enabled  
+const byte EEP_INVERTER_WARM_DELAY = 32; // milliseconds before starting inverter 
 
 //
 // Names of Data stored in these locations
 //
 
-prog_char string_00[] PROGMEM = "Version-Size";
+prog_char string_RES[] PROGMEM = "Reserved";
+prog_char string_DEP[] PROGMEM = "Deprecated";
+prog_char string_VS[] PROGMEM = "Version-Size";
+prog_char string_P0[] PROGMEM = "Cycles-SMC";
+prog_char string_P1[] PROGMEM = "Cycles-Power";
+prog_char string_P2[] PROGMEM = "Cycles-Sleep";
 prog_char string_01[] PROGMEM = "Bright-%";
 prog_char string_02[] PROGMEM = "MinBright-PWM"; 
 prog_char string_03[] PROGMEM = "MaxBright-PWM"; 
@@ -250,7 +272,6 @@ prog_char string_08[] PROGMEM = "MaxVolt-.01v";
 prog_char string_09[] PROGMEM = "CapDnThresh"; 
 prog_char string_10[] PROGMEM = "CapUpThresh";
 prog_char string_11[] PROGMEM = "CapSamples";
-prog_char string_12[] PROGMEM = "Deprecated-1";
 prog_char string_13[] PROGMEM = "MinLED-PWM";
 prog_char string_14[] PROGMEM = "MaxLED-PWM";  
 prog_char string_15[] PROGMEM = "InvertStartDly";  
@@ -263,22 +284,24 @@ prog_char string_18[] PROGMEM = "InvertWarmDly";
 //
 
 PROGMEM const char *eepName[] = { 
-  string_00, string_01, string_02, string_03, string_04, string_05, string_06, 
-  string_07, string_08, string_09, string_10, string_11, string_12, string_13, 
+  string_VS, string_P0, string_P1, string_P2,
+  string_RES, string_RES, string_RES, string_RES, string_RES, string_RES, string_RES, string_RES, string_RES, string_RES, string_RES, 
+  string_01, string_02, string_03, string_04, string_05, string_06, 
+  string_07, string_08, string_09, string_10, string_11, string_DEP, string_13, 
   string_14, string_15, string_16, string_17, string_18 };
 
 //
 // Number of Bytes store 1 - Byte ; 2 - Int ; 4 - Long;
 //
 
-const byte EEP_BYTE = 1;
-const byte EEP_INT = 2;
-const byte EEP_LONG = 4;
+//const byte EEP_BYTE = 1;
+//const byte EEP_INT = 2;
+//const byte EEP_LONG = 4;
 
-const byte eepBytes[] = {
-  EEP_BYTE,EEP_BYTE,EEP_BYTE,EEP_BYTE,EEP_BYTE,EEP_INT ,EEP_INT ,
-  EEP_INT ,EEP_INT ,EEP_INT ,EEP_INT ,EEP_INT ,EEP_BYTE,EEP_BYTE,
-  EEP_BYTE,EEP_INT ,EEP_BYTE,EEP_BYTE,EEP_INT};
+//const byte eepBytes[] = {
+//  EEP_BYTE,EEP_BYTE,EEP_BYTE,EEP_BYTE,EEP_BYTE,EEP_INT ,EEP_INT ,
+//  EEP_INT ,EEP_INT ,EEP_INT ,EEP_INT ,EEP_INT ,EEP_BYTE,EEP_BYTE,
+//  EEP_BYTE,EEP_INT ,EEP_BYTE,EEP_BYTE,EEP_INT};
 
 /**
  * Setup the device if not initialised, flasing the eeprom with defaults, if they dont exist
@@ -294,11 +317,21 @@ void checkEepromConfiguration() {
   byte currentHighest = eepromRead(EEP_VERSION);
   if ( currentHighest == 255 ) currentHighest = 0;
 
+/*
   // All The Deefault Values
-  if ( currentHighest < EEP_FAN_CONTROL ) { 
+  if ( currentHighest < EEP_INVERTER_WARM_DELAY ) { 
     
     // write default values
     eepromWrite( EEP_BRIGHT, 100 ); // 100% brightness
+    eepromWrite( EEP_RESERVED1, ZERO); // 
+    eepromWrite( EEP_RESERVED2, ZERO); // 
+    eepromWrite( EEP_RESERVED3, ZERO); // 
+    eepromWrite( EEP_RESERVED4, ZERO); // 
+    eepromWrite( EEP_RESERVED5, ZERO); // 
+    eepromWrite( EEP_RESERVED6, ZERO); // 
+    eepromWrite( EEP_RESERVED7, ZERO); // 
+    eepromWrite( EEP_RESERVED8, ZERO); // 
+    eepromWrite( EEP_RESERVED9, ZERO); // 
     eepromWrite( EEP_MIN_BRIGHT, 55 ); // PWM
     eepromWrite( EEP_MAX_BRIGHT, 255 ); // PWM
     eepromWrite( EEP_BRIGHT_INC, 5 ); // Brightness Increme
@@ -320,6 +353,47 @@ void checkEepromConfiguration() {
     // and version number
     currentHighest = EEP_INVERTER_WARM_DELAY;
   }
+ */
+ 
+  // All The Deefault Values
+  if ( currentHighest < EEP_INVERTER_WARM_DELAY ) { 
+
+    eepromWrite( EEP_INVERTER_WARM_DELAY, EEPROM.readInt(72) ); // Inverter Startup delay miliseconds
+    eepromWrite( EEP_FAN_CONTROL, EEPROM.readByte(68) ); // Inverter Startup delay miliseconds
+    eepromWrite( EEP_CAP_CONTROL, EEPROM.readByte(64) ); // Maximum Effects PWM for Front Panel LED
+    eepromWrite( EEP_INVERTER_STARTUP_DELAY, EEPROM.readByte(60) ); // Inverter Startup delay miliseconds
+    eepromWrite( EEP_MAX_LED_PWM, EEPROM.readByte(56) ); // Maximum Effects PWM for Front Panel LED
+    eepromWrite( EEP_MIN_LED_PWM, EEPROM.readByte(52) ); // Minimum Effects PWM for Front Panel LED
+    eepromWrite( EEP_DEPRECATED1, EEPROM.readByte(48) ); // Was Old Default Model ID
+    eepromWrite( EEP_CAP_SAMPLE, EEPROM.readInt(44) ); // Samples
+    eepromWrite( EEP_UP_CAP_THR, EEPROM.readInt(40) ); // Up Threashold
+    eepromWrite( EEP_DN_CAP_THR, EEPROM.readInt(36) ); // Down Threashhold
+    eepromWrite( EEP_MAX_VOLT, EEPROM.readInt(32) ); // 100ths of a volt
+    eepromWrite( EEP_MIN_VOLT, EEPROM.readInt(28) ); // 100ths of a volt e.g. 330 = 3.3V
+    eepromWrite( EEP_MAX_TEMP, EEPROM.readInt(24) ); // 100ths of a dreee
+    eepromWrite( EEP_MIN_TEMP, EEPROM.readInt(20) ); // 100ths of a dreee e.g. 2000 = 20.0 degrees
+    eepromWrite( EEP_BRIGHT_INC, EEPROM.readByte(16) ); // Brightness Increme
+    eepromWrite( EEP_MAX_BRIGHT, EEPROM.readByte(12) ); // PWM
+    eepromWrite( EEP_MIN_BRIGHT, EEPROM.readByte(8) ); // PWM
+    eepromWrite( EEP_BRIGHT, EEPROM.readByte(4) ); // 100% brightness
+        
+    eepromWrite( EEP_RESERVED1, ZERO); // 
+    eepromWrite( EEP_RESERVED2, ZERO); // 
+    eepromWrite( EEP_RESERVED3, ZERO); // 
+    eepromWrite( EEP_RESERVED4, ZERO); // 
+    eepromWrite( EEP_RESERVED5, ZERO); // 
+    eepromWrite( EEP_RESERVED6, ZERO); // 
+    eepromWrite( EEP_RESERVED7, ZERO); // 
+    eepromWrite( EEP_RESERVED8, ZERO); // 
+    eepromWrite( EEP_RESERVED9, ZERO); // 
+    
+    eepromWrite( EEP_CYC_SMC, ZERO);   // 
+    eepromWrite( EEP_CYC_POWER, ZERO); // 
+    eepromWrite( EEP_CYC_SLEEP, ZERO); // 
+    
+    // and version number
+    currentHighest = EEP_INVERTER_WARM_DELAY;
+  }  
 
   // finally update eprom with Highest numbered item stored in EEPROM
   eepromWrite(EEP_VERSION,currentHighest);
@@ -333,19 +407,19 @@ long eepromRead(byte location) {
     return -1;
   }
  
-  switch ( eepBytes[location] ) {
-    case EEP_BYTE:
-      return EEPROM.readByte( eepromLocation(location) );
-      break;
-    case EEP_INT:
-      return EEPROM.readInt( eepromLocation(location) );
-      break;
-    case EEP_LONG:
+//  switch ( eepBytes[location] ) {
+//    case EEP_BYTE:
+//      return EEPROM.readByte( eepromLocation(location) );
+//      break;
+//    case EEP_INT:
+//      return EEPROM.readInt( eepromLocation(location) );
+//      break;
+//    case EEP_LONG:
       return EEPROM.readLong( eepromLocation(location) );
-      break;
-    default:
-      return -1;
-  }
+//      break;
+//    default:
+//      return -1;
+ // }
 }
 
 int eepromWrite(byte location, long value) {
@@ -359,25 +433,25 @@ int eepromWrite(byte location, long value) {
   // and if the same then simply return
   if ( value == existing ) return 0;
   
-  switch ( eepBytes[location] ) {
-    case EEP_BYTE:
-      return EEPROM.updateByte( eepromLocation(location), value );
-      break;
-    case EEP_INT:
-      return EEPROM.updateInt( eepromLocation(location), value );
-      break;
-    case EEP_LONG:
+///  switch ( eepBytes[location] ) {
+//    case EEP_BYTE:
+//      return EEPROM.updateByte( eepromLocation(location), value );
+ //     break;
+ //   case EEP_INT:
+ //     return EEPROM.updateInt( eepromLocation(location), value );
+ //     break;
+//    case EEP_LONG:
       return EEPROM.updateLong( eepromLocation(location), value );
-      break;
-    default:
-      return -1;
-  }
+//      break;
+//    default:
+//      return -1;
+//  }
 }
 
 // ------------------ PRIVATE
 
 byte sizeofEeprom() {
-  return sizeof(eepBytes);
+  return sizeof(eepName);
 }
 
 boolean isLocationException(byte location) {
@@ -390,9 +464,6 @@ boolean isLocationException(byte location) {
 
 boolean isProtectedException(byte location) {
   return location <= 1;
-  // so the value be protected from update from public serial API
-  //static boolean eepProtected[] = {true,true,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false};
-  //  return eepProtected[location];
 }
 
 int eepromLocation(byte location) {
