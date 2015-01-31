@@ -28,7 +28,6 @@
 #include <PWMFrequency.h>
 #include <SimpleTimer.h>
 #include <FiniteStateMachine.h>
-//#include <EEPROM.h>
 #include <EEPROMex.h>
 #include <EEPROMVar.h>
 
@@ -355,9 +354,9 @@ void checkEepromConfiguration() {
 
 long eepromRead(byte location) {
   
-  if (isLocationException(location) ) {
-    return -1;
-  }
+  // Can write to an invalid location 
+  if (isLocationException(location) ) return -1;
+
   return EEPROM.readLong( eepromLocation(location) );
 }
 
@@ -366,12 +365,7 @@ int eepromWrite(byte location, long value) {
   // Can write to an invalid location 
   if (isLocationException(location) ) return -1;
 
-  // now read and see what value is currently stored
-  long existing = eepromRead(location);
-  
-  // and if the same then simply return
-  if ( value == existing ) return 0;
-
+  // the eeprom library protects from wrinting same values
   return EEPROM.updateLong( eepromLocation(location), value );
 }
 
@@ -383,7 +377,6 @@ void incrementCounter(byte location) {
 
 byte sizeofEeprom() {
   return EEP_INVERTER_WARM_DELAY + 1; // HARD COCDED
-  //return sizeof(eepName);
 }
 
 boolean isLocationException(byte location) {
@@ -398,15 +391,13 @@ boolean isProtectedException(byte location) {
   return location < 1;
 }
 
-int eepromLocation(byte location) {
+int inline eepromLocation(byte location) {
   return location * 4;
 }
 
 String eepromName(byte location) {
   static char buffer[20]; 
-  if (isLocationException(location) ) {
-    return "";
-  }
+  if (isLocationException(location) ) return "";
   strcpy_P(buffer, (char*)pgm_read_word(&(eepName[location])) ); 
   return buffer;
 }
@@ -485,6 +476,7 @@ void eepromWriteCommand(String extraCmd) {
     long value = val.toInt();
     
     if ( isLocationException(location) || isProtectedException(location) ) {
+    //if ( isProtectedException(location) ) {  
       Serial.print(F("Cannot write to address "));
       Serial.println(location);
       return;
@@ -847,6 +839,8 @@ void leavePowerUpMode() {
 // ---------------------------
 //
 
+#ifdef CAPACITIVE
+
 int capacitiveTimer = -1;
 
 void activateCapTouchBright() {
@@ -957,6 +951,14 @@ void touchControl() {
   // If the capacitive sensor reads above a certain threshold
   if (isDnSensorReadingOverThreshold()) decInverterBright();
 }
+
+#else
+
+void activateCapTouchBright() {}
+void deactivateCapTouchBright() {}
+void processCommandCapacitive(String subCmd, String extraCmd) {}
+  
+#endif
 
 //
 // -------------------------------------------------
@@ -1174,6 +1176,9 @@ void deactivateTempFanMonitor() {
 // -----------------------
 //
 
+// while debugging cant afford extra overhead
+#ifdef CAPACITIVE
+
 /**
  * Have we got a positive DOWN sensor reading
  */
@@ -1187,9 +1192,6 @@ boolean isDnSensorReadingOverThreshold() {
 boolean isUpSensorReadingOverThreshold() {
   return getUpSensorReading() > eepromRead(EEP_UP_CAP_THR);
 }
-
-// while debugging cant afford extra overhead
-#ifdef CAPACITIVE
 
 // 1M resistor between pins 4 & 2, pin 2 is sensor pin
 CapacitiveSensorDue dnSensor = CapacitiveSensorDue(TOUCH_COMMON_PIN_CAP,TOUCH_DOWN_PIN_CAP);	
