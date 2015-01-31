@@ -20,6 +20,8 @@
  */
 
 //#define DEBUG
+//#define CAPACITIVE
+#define TEMPERATURE
 
 #include <DebugUtils.h>
 
@@ -30,11 +32,11 @@
 #include <EEPROMex.h>
 #include <EEPROMVar.h>
 
-
-#ifndef DEBUG
-// while debugging cant afford extra overhead
-// so these libraries are excluded
+#ifdef CAPACITIVE
 #include <CapacitiveSensorDue.h>
+#endif
+
+#ifdef TEMPERATURE
 #include <OneWire.h>
 #include <DallasTemperature.h>
 #endif
@@ -258,10 +260,10 @@ const byte EEP_INVERTER_WARM_DELAY = 32; // milliseconds before starting inverte
 prog_char string_RES[] PROGMEM = "Reserved";
 prog_char string_DEP[] PROGMEM = "Deprecated";
 prog_char string_VS[] PROGMEM = "Version-Size";
-prog_char string_P0[] PROGMEM = "Cycles-SMC";
-prog_char string_P1[] PROGMEM = "Cycles-Power";
-prog_char string_P2[] PROGMEM = "Cycles-Sleep";
-prog_char string_01[] PROGMEM = "Bright-%";
+prog_char string_P0[] PROGMEM = "Bright-%";
+prog_char string_P1[] PROGMEM = "Cycles-SMC";
+prog_char string_P2[] PROGMEM = "Cycles-Power";
+prog_char string_P3[] PROGMEM = "Cycles-Sleep";
 prog_char string_02[] PROGMEM = "MinBright-PWM"; 
 prog_char string_03[] PROGMEM = "MaxBright-PWM"; 
 prog_char string_04[] PROGMEM = "BrightInc-%";
@@ -284,24 +286,11 @@ prog_char string_18[] PROGMEM = "InvertWarmDly";
 //
 
 PROGMEM const char *eepName[] = { 
-  string_VS, string_P0, string_P1, string_P2,
+  string_VS, string_P0, string_P1, string_P2, string_P3,
   string_RES, string_RES, string_RES, string_RES, string_RES, string_RES, string_RES, string_RES, string_RES, string_RES, string_RES, 
-  string_01, string_02, string_03, string_04, string_05, string_06, 
+  string_02, string_03, string_04, string_05, string_06, 
   string_07, string_08, string_09, string_10, string_11, string_DEP, string_13, 
   string_14, string_15, string_16, string_17, string_18 };
-
-//
-// Number of Bytes store 1 - Byte ; 2 - Int ; 4 - Long;
-//
-
-//const byte EEP_BYTE = 1;
-//const byte EEP_INT = 2;
-//const byte EEP_LONG = 4;
-
-//const byte eepBytes[] = {
-//  EEP_BYTE,EEP_BYTE,EEP_BYTE,EEP_BYTE,EEP_BYTE,EEP_INT ,EEP_INT ,
-//  EEP_INT ,EEP_INT ,EEP_INT ,EEP_INT ,EEP_INT ,EEP_BYTE,EEP_BYTE,
-//  EEP_BYTE,EEP_INT ,EEP_BYTE,EEP_BYTE,EEP_INT};
 
 /**
  * Setup the device if not initialised, flasing the eeprom with defaults, if they dont exist
@@ -317,12 +306,15 @@ void checkEepromConfiguration() {
   byte currentHighest = eepromRead(EEP_VERSION);
   if ( currentHighest == 255 ) currentHighest = 0;
 
-/*
   // All The Deefault Values
   if ( currentHighest < EEP_INVERTER_WARM_DELAY ) { 
     
     // write default values
     eepromWrite( EEP_BRIGHT, 100 ); // 100% brightness
+    eepromWrite( EEP_CYC_SMC, ZERO);   // 
+    eepromWrite( EEP_CYC_POWER, ZERO); // 
+    eepromWrite( EEP_CYC_SLEEP, ZERO); // 
+    eepromWrite( EEP_RESERVED0, ZERO); // 
     eepromWrite( EEP_RESERVED1, ZERO); // 
     eepromWrite( EEP_RESERVED2, ZERO); // 
     eepromWrite( EEP_RESERVED3, ZERO); // 
@@ -332,6 +324,7 @@ void checkEepromConfiguration() {
     eepromWrite( EEP_RESERVED7, ZERO); // 
     eepromWrite( EEP_RESERVED8, ZERO); // 
     eepromWrite( EEP_RESERVED9, ZERO); // 
+    eepromWrite( EEP_RESERVEDA, ZERO); // 
     eepromWrite( EEP_MIN_BRIGHT, 55 ); // PWM
     eepromWrite( EEP_MAX_BRIGHT, 255 ); // PWM
     eepromWrite( EEP_BRIGHT_INC, 5 ); // Brightness Increme
@@ -352,48 +345,7 @@ void checkEepromConfiguration() {
 
     // and version number
     currentHighest = EEP_INVERTER_WARM_DELAY;
-  }
- */
- 
-  // All The Deefault Values
-  if ( currentHighest < EEP_INVERTER_WARM_DELAY ) { 
-
-    eepromWrite( EEP_INVERTER_WARM_DELAY, EEPROM.readInt(72) ); // Inverter Startup delay miliseconds
-    eepromWrite( EEP_FAN_CONTROL, EEPROM.readByte(68) ); // Inverter Startup delay miliseconds
-    eepromWrite( EEP_CAP_CONTROL, EEPROM.readByte(64) ); // Maximum Effects PWM for Front Panel LED
-    eepromWrite( EEP_INVERTER_STARTUP_DELAY, EEPROM.readByte(60) ); // Inverter Startup delay miliseconds
-    eepromWrite( EEP_MAX_LED_PWM, EEPROM.readByte(56) ); // Maximum Effects PWM for Front Panel LED
-    eepromWrite( EEP_MIN_LED_PWM, EEPROM.readByte(52) ); // Minimum Effects PWM for Front Panel LED
-    eepromWrite( EEP_DEPRECATED1, EEPROM.readByte(48) ); // Was Old Default Model ID
-    eepromWrite( EEP_CAP_SAMPLE, EEPROM.readInt(44) ); // Samples
-    eepromWrite( EEP_UP_CAP_THR, EEPROM.readInt(40) ); // Up Threashold
-    eepromWrite( EEP_DN_CAP_THR, EEPROM.readInt(36) ); // Down Threashhold
-    eepromWrite( EEP_MAX_VOLT, EEPROM.readInt(32) ); // 100ths of a volt
-    eepromWrite( EEP_MIN_VOLT, EEPROM.readInt(28) ); // 100ths of a volt e.g. 330 = 3.3V
-    eepromWrite( EEP_MAX_TEMP, EEPROM.readInt(24) ); // 100ths of a dreee
-    eepromWrite( EEP_MIN_TEMP, EEPROM.readInt(20) ); // 100ths of a dreee e.g. 2000 = 20.0 degrees
-    eepromWrite( EEP_BRIGHT_INC, EEPROM.readByte(16) ); // Brightness Increme
-    eepromWrite( EEP_MAX_BRIGHT, EEPROM.readByte(12) ); // PWM
-    eepromWrite( EEP_MIN_BRIGHT, EEPROM.readByte(8) ); // PWM
-    eepromWrite( EEP_BRIGHT, EEPROM.readByte(4) ); // 100% brightness
-        
-    eepromWrite( EEP_RESERVED1, ZERO); // 
-    eepromWrite( EEP_RESERVED2, ZERO); // 
-    eepromWrite( EEP_RESERVED3, ZERO); // 
-    eepromWrite( EEP_RESERVED4, ZERO); // 
-    eepromWrite( EEP_RESERVED5, ZERO); // 
-    eepromWrite( EEP_RESERVED6, ZERO); // 
-    eepromWrite( EEP_RESERVED7, ZERO); // 
-    eepromWrite( EEP_RESERVED8, ZERO); // 
-    eepromWrite( EEP_RESERVED9, ZERO); // 
-    
-    eepromWrite( EEP_CYC_SMC, ZERO);   // 
-    eepromWrite( EEP_CYC_POWER, ZERO); // 
-    eepromWrite( EEP_CYC_SLEEP, ZERO); // 
-    
-    // and version number
-    currentHighest = EEP_INVERTER_WARM_DELAY;
-  }  
+  } 
 
   // finally update eprom with Highest numbered item stored in EEPROM
   eepromWrite(EEP_VERSION,currentHighest);
@@ -406,20 +358,7 @@ long eepromRead(byte location) {
   if (isLocationException(location) ) {
     return -1;
   }
- 
-//  switch ( eepBytes[location] ) {
-//    case EEP_BYTE:
-//      return EEPROM.readByte( eepromLocation(location) );
-//      break;
-//    case EEP_INT:
-//      return EEPROM.readInt( eepromLocation(location) );
-//      break;
-//    case EEP_LONG:
-      return EEPROM.readLong( eepromLocation(location) );
-//      break;
-//    default:
-//      return -1;
- // }
+  return EEPROM.readLong( eepromLocation(location) );
 }
 
 int eepromWrite(byte location, long value) {
@@ -432,26 +371,19 @@ int eepromWrite(byte location, long value) {
   
   // and if the same then simply return
   if ( value == existing ) return 0;
-  
-///  switch ( eepBytes[location] ) {
-//    case EEP_BYTE:
-//      return EEPROM.updateByte( eepromLocation(location), value );
- //     break;
- //   case EEP_INT:
- //     return EEPROM.updateInt( eepromLocation(location), value );
- //     break;
-//    case EEP_LONG:
-      return EEPROM.updateLong( eepromLocation(location), value );
-//      break;
-//    default:
-//      return -1;
-//  }
+
+  return EEPROM.updateLong( eepromLocation(location), value );
+}
+
+void incrementCounter(byte location) {
+  eepromWrite(location, eepromRead(location)+1);
 }
 
 // ------------------ PRIVATE
 
 byte sizeofEeprom() {
-  return sizeof(eepName);
+  return EEP_INVERTER_WARM_DELAY + 1; // HARD COCDED
+  //return sizeof(eepName);
 }
 
 boolean isLocationException(byte location) {
@@ -463,7 +395,7 @@ boolean isLocationException(byte location) {
 }
 
 boolean isProtectedException(byte location) {
-  return location <= 1;
+  return location < 1;
 }
 
 int eepromLocation(byte location) {
@@ -628,6 +560,9 @@ void startupAndTransition() {
 
   // signal the sucessfule startup
   activateFrontPanelFlash(3);
+  
+  // count the start of the MCU
+  incrementCounter(EEP_CYC_SMC);
 
   // iMac G5 20 - KiwiSinceBirth - Startup
   fsm.transitionTo(STATE_ACTIVE);
@@ -651,7 +586,10 @@ void enterActiveMode() {
     
     // signal the chime in 100 millis
     initiateTimedChime(ONE_HUNDRED_MILLIS);
-      
+    
+    // count the power cycle
+    incrementCounter(EEP_CYC_POWER);
+    
     // read the startup dealy - before powering on the LCD
     int invDelay = eepromRead(EEP_INVERTER_STARTUP_DELAY);
 
@@ -730,7 +668,10 @@ void updateSleepMode() {
 void leaveSleepMode() {
 
   // DEBUG
-  DEBUG_PRINTF("LEAVE-ACTIVE");
+  DEBUG_PRINTF("LEAVE-SLEEP");
+  
+  // count the sleep cycle
+  incrementCounter(EEP_CYC_SLEEP);
 }
 
 //
@@ -1248,13 +1189,7 @@ boolean isUpSensorReadingOverThreshold() {
 }
 
 // while debugging cant afford extra overhead
-#ifdef DEBUG
-
-long getDnSensorReading    () { return 0; }
-long getUpSensorReading    () { return 0; }
-void calibrateSensorReading() { }
-
-#else
+#ifdef CAPACITIVE
 
 // 1M resistor between pins 4 & 2, pin 2 is sensor pin
 CapacitiveSensorDue dnSensor = CapacitiveSensorDue(TOUCH_COMMON_PIN_CAP,TOUCH_DOWN_PIN_CAP);	
@@ -1281,6 +1216,12 @@ void calibrateSensorReading() {
   dnSensor.calibrate();
 }
 
+#else
+
+long getDnSensorReading    () { return 0; }
+long getUpSensorReading    () { return 0; }
+void calibrateSensorReading() { }
+
 #endif
 
 //
@@ -1289,12 +1230,7 @@ void calibrateSensorReading() {
 // ----------
 //
 
-#ifdef DEBUG
-
-float getTempDiff()    { return 5; }
-float getAmbientTemp() { return 20; }
-  
-#else
+#ifdef TEMPERATURE
 
 float ambient_temp = DEVICE_DISCONNECTED_C;
 
@@ -1338,6 +1274,11 @@ float getAmbientTemp() {
   return ambient_temp;
 }
 
+#else
+
+float getTempDiff()    { return 10; }
+float getAmbientTemp() { return 20; }
+  
 #endif
 
 //
