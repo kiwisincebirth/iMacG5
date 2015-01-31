@@ -20,20 +20,26 @@
  */
 
 //#define DEBUG
+#define COMMANDABLE
+#define CAPACITIVE
+#define TEMPERATURE
 
 #include <DebugUtils.h>
 
 #include <PWMFrequency.h>
 #include <SimpleTimer.h>
 #include <FiniteStateMachine.h>
+
 #include <EEPROMex.h>
 #include <EEPROMVar.h>
+// NOTE: Please remove the "_EEPROMEX_DEBUG" 
+// #define in the source code of the library
 
-
-#ifndef DEBUG
-// while debugging cant afford extra overhead
-// so these libraries are excluded
+#ifdef CAPACITIVE
 #include <CapacitiveSensorDue.h>
+#endif
+
+#ifdef TEMPERATURE
 #include <OneWire.h>
 #include <DallasTemperature.h>
 #endif
@@ -85,6 +91,9 @@
 // REVISION HISTORY
 // ================
 // 1.0 - 26/07/2014 - Initial Stable Feature complete Release
+// 1.1 - 31/01/2015 - Added support for RPM Fan Input, future feature
+// 1.1 - 31/01/2015 - Simplified EEPROM Code, Long support Only.
+// 1.1 - 31/01/2015 - Added addition ifdefs to reduce size of bnary.
 //
 // --------------
 // Future Futures
@@ -216,30 +225,51 @@ const byte EEP_VERSION = 0;
 //
 
 const byte EEP_BRIGHT = 1; // brghtness Setting 0 - 100 %
-const byte EEP_MIN_BRIGHT = 2; // Minimum PWM for Inverter - When Brihhtness is 0%
-const byte EEP_MAX_BRIGHT = 3; // Maximum PWM for Inverter - When Brightness is 100%
-const byte EEP_BRIGHT_INC = 4; // Number of percent brightness Increased or decreased
-const byte EEP_MIN_TEMP = 5; // Fan Control to Map Temp to Voltage
-const byte EEP_MAX_TEMP = 6; // Fan Control to Map Temp to Voltage
-const byte EEP_MIN_VOLT = 7; // Fan Control to Map Temp to Voltage
-const byte EEP_MAX_VOLT = 8; // Fan Control to Map Temp to Voltage
-const byte EEP_DN_CAP_THR = 9; // Capacatance Treshold for Down Button
-const byte EEP_UP_CAP_THR = 10; // Capacatance Treshold for Up Button
-const byte EEP_CAP_SAMPLE = 11; // Number of Samples for Capacatance
-const byte EEP_DEPRECATED1 = 12; // The Old Model ID of the project this board implements
-const byte EEP_MIN_LED_PWM = 13; // Minimum PWM Value for Front Panel LED Effects
-const byte EEP_MAX_LED_PWM = 14; // Maximum PWM Value for Front Panel LED Effects
-const byte EEP_INVERTER_STARTUP_DELAY = 15; // milliseconds before starting inverter 
-const byte EEP_CAP_CONTROL = 16; // is the capacatace controller enabled 
-const byte EEP_FAN_CONTROL = 17; // is the fan temp controller enabled  
-const byte EEP_INVERTER_WARM_DELAY = 18; // milliseconds before starting inverter 
+const byte EEP_CYC_SMC = 2; // SMC Power / Rest Cycles (StartUp)
+const byte EEP_CYC_POWER = 3; // CPU Power Cycles (Power Up)
+const byte EEP_CYC_SLEEP = 4; // CPU Sleep Cycles (Wake)
+
+const byte EEP_RESERVED0 = 5; 
+const byte EEP_RESERVED1 = 6; 
+const byte EEP_RESERVED2 = 7; 
+const byte EEP_RESERVED3 = 8; 
+const byte EEP_RESERVED4 = 9; 
+const byte EEP_RESERVED5 = 10; 
+const byte EEP_RESERVED6 = 11; 
+const byte EEP_RESERVED7 = 12; 
+const byte EEP_RESERVED8 = 13; 
+const byte EEP_RESERVED9 = 14; 
+const byte EEP_RESERVEDA = 15; 
+
+const byte EEP_MIN_BRIGHT = 16; // Minimum PWM for Inverter - When Brihhtness is 0%
+const byte EEP_MAX_BRIGHT = 17; // Maximum PWM for Inverter - When Brightness is 100%
+const byte EEP_BRIGHT_INC = 18; // Number of percent brightness Increased or decreased
+const byte EEP_MIN_TEMP = 19; // Fan Control to Map Temp to Voltage
+const byte EEP_MAX_TEMP = 20; // Fan Control to Map Temp to Voltage
+const byte EEP_MIN_VOLT = 21; // Fan Control to Map Temp to Voltage
+const byte EEP_MAX_VOLT = 22; // Fan Control to Map Temp to Voltage
+const byte EEP_DN_CAP_THR = 23; // Capacatance Treshold for Down Button
+const byte EEP_UP_CAP_THR = 24; // Capacatance Treshold for Up Button
+const byte EEP_CAP_SAMPLE = 25; // Number of Samples for Capacatance
+const byte EEP_DEPRECATED1 = 26; // The Old Model ID of the project this board implements
+const byte EEP_MIN_LED_PWM = 27; // Minimum PWM Value for Front Panel LED Effects
+const byte EEP_MAX_LED_PWM = 28; // Maximum PWM Value for Front Panel LED Effects
+const byte EEP_INVERTER_STARTUP_DELAY = 29; // milliseconds before starting inverter 
+const byte EEP_CAP_CONTROL = 30; // is the capacatace controller enabled 
+const byte EEP_FAN_CONTROL = 31; // is the fan temp controller enabled  
+const byte EEP_INVERTER_WARM_DELAY = 32; // milliseconds before starting inverter 
 
 //
 // Names of Data stored in these locations
 //
 
-prog_char string_00[] PROGMEM = "Version-Size";
-prog_char string_01[] PROGMEM = "Bright-%";
+prog_char string_RES[] PROGMEM = "Reserved";
+prog_char string_DEP[] PROGMEM = "Deprecated";
+prog_char string_VS[] PROGMEM = "Version-Size";
+prog_char string_P0[] PROGMEM = "Bright-%";
+prog_char string_P1[] PROGMEM = "Cycles-SMC";
+prog_char string_P2[] PROGMEM = "Cycles-Power";
+prog_char string_P3[] PROGMEM = "Cycles-Sleep";
 prog_char string_02[] PROGMEM = "MinBright-PWM"; 
 prog_char string_03[] PROGMEM = "MaxBright-PWM"; 
 prog_char string_04[] PROGMEM = "BrightInc-%";
@@ -250,7 +280,6 @@ prog_char string_08[] PROGMEM = "MaxVolt-.01v";
 prog_char string_09[] PROGMEM = "CapDnThresh"; 
 prog_char string_10[] PROGMEM = "CapUpThresh";
 prog_char string_11[] PROGMEM = "CapSamples";
-prog_char string_12[] PROGMEM = "Deprecated-1";
 prog_char string_13[] PROGMEM = "MinLED-PWM";
 prog_char string_14[] PROGMEM = "MaxLED-PWM";  
 prog_char string_15[] PROGMEM = "InvertStartDly";  
@@ -263,22 +292,11 @@ prog_char string_18[] PROGMEM = "InvertWarmDly";
 //
 
 PROGMEM const char *eepName[] = { 
-  string_00, string_01, string_02, string_03, string_04, string_05, string_06, 
-  string_07, string_08, string_09, string_10, string_11, string_12, string_13, 
+  string_VS, string_P0, string_P1, string_P2, string_P3,
+  string_RES, string_RES, string_RES, string_RES, string_RES, string_RES, string_RES, string_RES, string_RES, string_RES, string_RES, 
+  string_02, string_03, string_04, string_05, string_06, 
+  string_07, string_08, string_09, string_10, string_11, string_DEP, string_13, 
   string_14, string_15, string_16, string_17, string_18 };
-
-//
-// Number of Bytes store 1 - Byte ; 2 - Int ; 4 - Long;
-//
-
-const byte EEP_BYTE = 1;
-const byte EEP_INT = 2;
-const byte EEP_LONG = 4;
-
-const byte eepBytes[] = {
-  EEP_BYTE,EEP_BYTE,EEP_BYTE,EEP_BYTE,EEP_BYTE,EEP_INT ,EEP_INT ,
-  EEP_INT ,EEP_INT ,EEP_INT ,EEP_INT ,EEP_INT ,EEP_BYTE,EEP_BYTE,
-  EEP_BYTE,EEP_INT ,EEP_BYTE,EEP_BYTE,EEP_INT};
 
 /**
  * Setup the device if not initialised, flasing the eeprom with defaults, if they dont exist
@@ -295,31 +313,45 @@ void checkEepromConfiguration() {
   if ( currentHighest == 255 ) currentHighest = 0;
 
   // All The Deefault Values
-  if ( currentHighest < EEP_FAN_CONTROL ) { 
+  if ( currentHighest < EEP_INVERTER_WARM_DELAY ) { 
     
     // write default values
     eepromWrite( EEP_BRIGHT, 100 ); // 100% brightness
-    eepromWrite( EEP_MIN_BRIGHT, 55 ); // PWM
+    eepromWrite( EEP_CYC_SMC, ZERO);   // 
+    eepromWrite( EEP_CYC_POWER, ZERO); // 
+    eepromWrite( EEP_CYC_SLEEP, ZERO); // 
+    eepromWrite( EEP_RESERVED0, ZERO); // 
+    eepromWrite( EEP_RESERVED1, ZERO); // 
+    eepromWrite( EEP_RESERVED2, ZERO); // 
+    eepromWrite( EEP_RESERVED3, ZERO); // 
+    eepromWrite( EEP_RESERVED4, ZERO); // 
+    eepromWrite( EEP_RESERVED5, ZERO); // 
+    eepromWrite( EEP_RESERVED6, ZERO); // 
+    eepromWrite( EEP_RESERVED7, ZERO); // 
+    eepromWrite( EEP_RESERVED8, ZERO); // 
+    eepromWrite( EEP_RESERVED9, ZERO); // 
+    eepromWrite( EEP_RESERVEDA, ZERO); // 
+    eepromWrite( EEP_MIN_BRIGHT, 60 ); // PWM
     eepromWrite( EEP_MAX_BRIGHT, 255 ); // PWM
     eepromWrite( EEP_BRIGHT_INC, 5 ); // Brightness Increme
     eepromWrite( EEP_MIN_TEMP, 0 ); // 100ths of a dreee e.g. 2000 = 20.0 degrees
     eepromWrite( EEP_MAX_TEMP, 2000 ); // 100ths of a dreee
-    eepromWrite( EEP_MIN_VOLT, 330 ); // 100ths of a volt e.g. 330 = 3.3V
-    eepromWrite( EEP_MAX_VOLT, 1000 ); // 100ths of a volt
-    eepromWrite( EEP_DN_CAP_THR, 100 ); // Down Threashhold
-    eepromWrite( EEP_UP_CAP_THR, 100 ); // Up Threashold
+    eepromWrite( EEP_MIN_VOLT, 250 ); // 100ths of a volt e.g. 330 = 3.3V
+    eepromWrite( EEP_MAX_VOLT, 550 ); // 100ths of a volt
+    eepromWrite( EEP_DN_CAP_THR, 150 ); // Down Threashhold
+    eepromWrite( EEP_UP_CAP_THR, 150 ); // Up Threashold
     eepromWrite( EEP_CAP_SAMPLE, 200 ); // Samples
     eepromWrite( EEP_DEPRECATED1, ZERO ); // Was Old Default Model ID
-    eepromWrite( EEP_MIN_LED_PWM, 0 ); // Minimum Effects PWM for Front Panel LED
+    eepromWrite( EEP_MIN_LED_PWM, 5 ); // Minimum Effects PWM for Front Panel LED
     eepromWrite( EEP_MAX_LED_PWM, 255 ); // Maximum Effects PWM for Front Panel LED
-    eepromWrite( EEP_INVERTER_STARTUP_DELAY, 100 ); // Inverter Startup delay miliseconds
-    eepromWrite( EEP_CAP_CONTROL, 1 ); // Maximum Effects PWM for Front Panel LED
+    eepromWrite( EEP_INVERTER_STARTUP_DELAY, 6000 ); // COLD Inverter Startup delay miliseconds
+    eepromWrite( EEP_CAP_CONTROL, 0 ); // Maximum Effects PWM for Front Panel LED
     eepromWrite( EEP_FAN_CONTROL, 1 ); // Inverter Startup delay miliseconds
-    eepromWrite( EEP_INVERTER_WARM_DELAY, 100 ); // Inverter Startup delay miliseconds
+    eepromWrite( EEP_INVERTER_WARM_DELAY, 6000 ); // WARM Inverter Startup delay miliseconds
 
     // and version number
     currentHighest = EEP_INVERTER_WARM_DELAY;
-  }
+  } 
 
   // finally update eprom with Highest numbered item stored in EEPROM
   eepromWrite(EEP_VERSION,currentHighest);
@@ -329,23 +361,10 @@ void checkEepromConfiguration() {
 
 long eepromRead(byte location) {
   
-  if (isLocationException(location) ) {
-    return -1;
-  }
- 
-  switch ( eepBytes[location] ) {
-    case EEP_BYTE:
-      return EEPROM.readByte( eepromLocation(location) );
-      break;
-    case EEP_INT:
-      return EEPROM.readInt( eepromLocation(location) );
-      break;
-    case EEP_LONG:
-      return EEPROM.readLong( eepromLocation(location) );
-      break;
-    default:
-      return -1;
-  }
+  // Can write to an invalid location 
+  if (isLocationException(location) ) return -1;
+
+  return EEPROM.readLong( eepromLocation(location) );
 }
 
 int eepromWrite(byte location, long value) {
@@ -353,31 +372,18 @@ int eepromWrite(byte location, long value) {
   // Can write to an invalid location 
   if (isLocationException(location) ) return -1;
 
-  // now read and see what value is currently stored
-  long existing = eepromRead(location);
-  
-  // and if the same then simply return
-  if ( value == existing ) return 0;
-  
-  switch ( eepBytes[location] ) {
-    case EEP_BYTE:
-      return EEPROM.updateByte( eepromLocation(location), value );
-      break;
-    case EEP_INT:
-      return EEPROM.updateInt( eepromLocation(location), value );
-      break;
-    case EEP_LONG:
-      return EEPROM.updateLong( eepromLocation(location), value );
-      break;
-    default:
-      return -1;
-  }
+  // the eeprom library protects from wrinting same values
+  return EEPROM.updateLong( eepromLocation(location), value );
+}
+
+void incrementCounter(byte location) {
+  eepromWrite(location, eepromRead(location)+1);
 }
 
 // ------------------ PRIVATE
 
 byte sizeofEeprom() {
-  return sizeof(eepBytes);
+  return EEP_INVERTER_WARM_DELAY + 1; // HARD COCDED
 }
 
 boolean isLocationException(byte location) {
@@ -389,26 +395,23 @@ boolean isLocationException(byte location) {
 }
 
 boolean isProtectedException(byte location) {
-  return location <= 1;
-  // so the value be protected from update from public serial API
-  //static boolean eepProtected[] = {true,true,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false};
-  //  return eepProtected[location];
+  return location < 1;
 }
 
-int eepromLocation(byte location) {
+int inline eepromLocation(byte location) {
   return location * 4;
 }
 
 String eepromName(byte location) {
   static char buffer[20]; 
-  if (isLocationException(location) ) {
-    return "";
-  }
+  if (isLocationException(location) ) return "";
   strcpy_P(buffer, (char*)pgm_read_word(&(eepName[location])) ); 
   return buffer;
 }
 
 // -------------------------------
+
+#ifdef COMMANDABLE
 
 /**
  * Process a command from the serial port
@@ -482,6 +485,7 @@ void eepromWriteCommand(String extraCmd) {
     long value = val.toInt();
     
     if ( isLocationException(location) || isProtectedException(location) ) {
+    //if ( isProtectedException(location) ) {  
       Serial.print(F("Cannot write to address "));
       Serial.println(location);
       return;
@@ -506,6 +510,8 @@ void eepromInitCommand() {
     
     Serial.println(F("Flashed."));
 }
+
+#endif
 
 //
 // ============================================
@@ -557,6 +563,9 @@ void startupAndTransition() {
 
   // signal the sucessfule startup
   activateFrontPanelFlash(3);
+  
+  // count the start of the MCU
+  incrementCounter(EEP_CYC_SMC);
 
   // iMac G5 20 - KiwiSinceBirth - Startup
   fsm.transitionTo(STATE_ACTIVE);
@@ -580,7 +589,10 @@ void enterActiveMode() {
     
     // signal the chime in 100 millis
     initiateTimedChime(ONE_HUNDRED_MILLIS);
-      
+    
+    // count the power cycle
+    incrementCounter(EEP_CYC_POWER);
+    
     // read the startup dealy - before powering on the LCD
     int invDelay = eepromRead(EEP_INVERTER_STARTUP_DELAY);
 
@@ -659,7 +671,10 @@ void updateSleepMode() {
 void leaveSleepMode() {
 
   // DEBUG
-  DEBUG_PRINTF("LEAVE-ACTIVE");
+  DEBUG_PRINTF("LEAVE-SLEEP");
+  
+  // count the sleep cycle
+  incrementCounter(EEP_CYC_SLEEP);
 }
 
 //
@@ -835,6 +850,8 @@ void leavePowerUpMode() {
 // ---------------------------
 //
 
+#ifdef CAPACITIVE
+
 int capacitiveTimer = -1;
 
 void activateCapTouchBright() {
@@ -868,6 +885,8 @@ void deactivateCapTouchBright() {
 }
 
 // PRIVATE ------------------
+
+#ifdef COMMANDABLE
 
 /*
  * Handles processing command from Serial API
@@ -936,6 +955,8 @@ void processCommandCapacitiveCalibrate() {
 
 }
 
+#endif
+
 // Main Touch Sensor Reading
 void touchControl() {
 
@@ -945,6 +966,14 @@ void touchControl() {
   // If the capacitive sensor reads above a certain threshold
   if (isDnSensorReadingOverThreshold()) decInverterBright();
 }
+
+#else
+
+void activateCapTouchBright() {}
+void deactivateCapTouchBright() {}
+void processCommandCapacitive(String subCmd, String extraCmd) {}
+  
+#endif
 
 //
 // -------------------------------------------------
@@ -997,6 +1026,8 @@ void deactivateTempFanControl() {
 
 // PRIVATE ------------------
 
+#ifdef COMMANDABLE
+
 /*
  * Handles processing command from Serial API
  */
@@ -1027,6 +1058,8 @@ void processCommandFan(String subCmd, String extraCmd) {
     Serial.println(F("Fan Command Unknown: FM (max), FA (activate), FD (deactivate), FL (log), FO (log off)"));
   }  
 }
+
+#endif
 
 void readTempSetTargetVolt() {
  
@@ -1062,6 +1095,8 @@ float computeTempFactor( float temp ) {
 
 // PRIVATE ------------------- MONITORING INFO
 
+#ifdef COMMANDABLE
+
 void printFanDetails() {
     Serial.print(getAmbientTemp());
     Serial.print(F("\t"));
@@ -1082,37 +1117,6 @@ void printFanDetails() {
 
 int tempFanMonitorTimer = -1;
 
-volatile long fan1RotationCount;
-volatile unsigned long fan1TimeStart;
-volatile long fan2RotationCount;
-volatile unsigned long fan2TimeStart;
-
-void interrupFan1() {
-  fan1RotationCount ++;
-}
-
-void interrupFan2() {
-  fan2RotationCount ++;
-}
-
-int getFanRPM1() {
-  //if ( fan1RotationCount ) return 0;
-  double ret = fan1RotationCount /2L *1000L * 60L / ( millis() - fan1TimeStart );
-  //fan1RotationCount = -1;
-  fan1RotationCount = 0;
-  fan1TimeStart = millis();
-  return  ret;
-}
-
-int getFanRPM2() {
-  //if ( fan2RotationCount<1 ) return 0;
-  double ret = fan2RotationCount /2L * 1000L * 60L / ( millis() - fan2TimeStart );
-  //fan2RotationCount = -1;
-  fan2RotationCount = 0;
-  fan2TimeStart = millis();
-  return  ret;
-}
-
 /**
  * Activate the controller, and set the fan speed based on Temperature
  */
@@ -1120,21 +1124,12 @@ void activateTempFanMonitor() {
   
   if ( tempFanMonitorTimer == -1 ) { 
     
-    pinMode(FAN1_PWM_PIN,INPUT_PULLUP);    
-    pinMode(FAN2_PWM_PIN,INPUT_PULLUP);    
-
-    // interrupts
-    attachInterrupt(FAN1_INTERRUPT,interrupFan1,FALLING);
-    attachInterrupt(FAN2_INTERRUPT,interrupFan2,FALLING);
-    
     // setup a timer that runs every 500 ms - To Read Temperature
     tempFanMonitorTimer = timer.setInterval(3000,printFanDetails);
   }
 
-  fan1RotationCount = 0;
-  fan2RotationCount = 0;
-  fan1TimeStart = millis();
-  fan2TimeStart = millis();
+  getFanRPM1();
+  getFanRPM2();
 
   // make sure the Timer Thread is active
   timer.enable(tempFanMonitorTimer);    
@@ -1149,6 +1144,7 @@ void deactivateTempFanMonitor() {
   if (tempFanMonitorTimer >=0 ) timer.disable(tempFanMonitorTimer);  
 }
 
+#endif
 
 //
 // =======
@@ -1161,6 +1157,9 @@ void deactivateTempFanMonitor() {
 // CAPACITIVE TOUCH INPUTS
 // -----------------------
 //
+
+// while debugging cant afford extra overhead
+#ifdef CAPACITIVE
 
 /**
  * Have we got a positive DOWN sensor reading
@@ -1175,15 +1174,6 @@ boolean isDnSensorReadingOverThreshold() {
 boolean isUpSensorReadingOverThreshold() {
   return getUpSensorReading() > eepromRead(EEP_UP_CAP_THR);
 }
-
-// while debugging cant afford extra overhead
-#ifdef DEBUG
-
-long getDnSensorReading    () { return 0; }
-long getUpSensorReading    () { return 0; }
-void calibrateSensorReading() { }
-
-#else
 
 // 1M resistor between pins 4 & 2, pin 2 is sensor pin
 CapacitiveSensorDue dnSensor = CapacitiveSensorDue(TOUCH_COMMON_PIN_CAP,TOUCH_DOWN_PIN_CAP);	
@@ -1210,7 +1200,64 @@ void calibrateSensorReading() {
   dnSensor.calibrate();
 }
 
+#else
+
+long getDnSensorReading    () { return 0; }
+long getUpSensorReading    () { return 0; }
+void calibrateSensorReading() { }
+
 #endif
+
+//
+// ----------
+// RPM INPUTS
+// ----------
+//
+
+volatile long fan1RotationCount;
+volatile unsigned long fan1TimeStart;
+volatile long fan2RotationCount;
+volatile unsigned long fan2TimeStart;
+
+void interrupFan1() {
+  fan1RotationCount ++;
+}
+
+void interrupFan2() {
+  fan2RotationCount ++;
+}
+
+int getFanRPM1() {
+  
+  static boolean started = false;
+  if (!started) {
+    // Start Up the RPM by setting PN and attaching interrupt
+    pinMode(FAN1_PWM_PIN,INPUT_PULLUP);    
+    attachInterrupt(FAN1_INTERRUPT,interrupFan1,FALLING);
+    started = true;
+  }
+
+  double ret = fan1RotationCount /2L *1000L * 60L / ( millis() - fan1TimeStart );
+  fan1RotationCount = 0;
+  fan1TimeStart = millis();
+  return  ret;
+}
+
+int getFanRPM2() {
+
+  static boolean started = false;
+  if (!started) {
+    // Start Up the RPM by setting PN and attaching interrupt
+    pinMode(FAN2_PWM_PIN,INPUT_PULLUP);    
+    attachInterrupt(FAN2_INTERRUPT,interrupFan2,FALLING);
+    started = true;
+  }
+
+  double ret = fan2RotationCount /2L * 1000L * 60L / ( millis() - fan2TimeStart );
+  fan1RotationCount = 0;
+  fan1TimeStart = millis();
+  return  ret;
+}
 
 //
 // ----------
@@ -1218,12 +1265,7 @@ void calibrateSensorReading() {
 // ----------
 //
 
-#ifdef DEBUG
-
-float getTempDiff()    { return 5; }
-float getAmbientTemp() { return 20; }
-  
-#else
+#ifdef TEMPERATURE
 
 float ambient_temp = DEVICE_DISCONNECTED_C;
 
@@ -1267,6 +1309,11 @@ float getAmbientTemp() {
   return ambient_temp;
 }
 
+#else
+
+float getTempDiff()    { return 10; }
+float getAmbientTemp() { return 20; }
+  
 #endif
 
 //
@@ -1638,16 +1685,16 @@ void processCommandBrightness(String subCmd, String extraCmd) {
     // Deactivate Inverter
     deactivateInverter();
     
-  } else if (subCmd.equals("+")) {
-    // Deactivate Inverter
-    incInverterBright();
-    
-  } else if (subCmd.equals("-")) {
-    // Deactivate Inverter
-    decInverterBright();
+//  } else if (subCmd.equals("+")) {
+//    // Deactivate Inverter
+//    incInverterBright();
+//    
+//  } else if (subCmd.equals("-")) {
+//    // Deactivate Inverter
+//    decInverterBright();
     
   } else {
-    Serial.println(F("Brightness Command Unknown: BR (read), BW (write), BA (activate), BD (deactivate), B+, B- (change)"));
+    Serial.println(F("Brightness Command Unknown: BR (read), BW (write), BA (activate), BD (deactivate)"));
   }
 }
 
@@ -1984,6 +2031,8 @@ float computeRampUp( unsigned long timeInCycle ) {
 
 // -----------------------------------------
 
+#ifdef COMMANDABLE
+
 /*
  * Handles processing command from Serial API
  */
@@ -1999,6 +2048,8 @@ void processCommandLed(String subCmd, String extraCmd) {
     Serial.println(F("LED Command Unknown: F n (flash n times)"));
   }
 }
+
+#endif
 
 //
 // =====================
@@ -2070,6 +2121,8 @@ void processCommand(String cmd) {
   if (firstCmd.equals("B")) {
     processCommandBrightness(secondCmd,extraCmd);
   
+#ifdef COMMANDABLE
+  
   } else if (firstCmd.equals("C")) {
     processCommandCapacitive(secondCmd,extraCmd);
 
@@ -2087,9 +2140,14 @@ void processCommand(String cmd) {
 
   } else {
     Serial.println(F("Command Unknown: B (brighness), C (capacitive), E (eeprom), F (fans), L (front led), S (system)"));
+    
+#endif    
+
   }
   
 }
+
+#ifdef COMMANDABLE
 
 void processCommandSystem(String subCmd, String extraCmd) {
   
@@ -2144,6 +2202,8 @@ void processCommandSystem(String subCmd, String extraCmd) {
     Serial.println(F("System Command Unknown: R (ram), U (uptime), T (timers)"));
   }
 }
+
+#endif
 
 //
 // =================================
