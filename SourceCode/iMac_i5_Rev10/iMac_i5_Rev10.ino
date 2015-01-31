@@ -21,7 +21,7 @@
 
 //#define DEBUG
 #define COMMANDABLE
-//#define CAPACITIVE
+#define CAPACITIVE
 #define TEMPERATURE
 
 #include <DebugUtils.h>
@@ -31,6 +31,7 @@
 #include <FiniteStateMachine.h>
 
 #include <EEPROMex.h>
+#include <EEPROMVar.h>
 // NOTE: Please remove the "_EEPROMEX_DEBUG" 
 // #define in the source code of the library
 
@@ -242,7 +243,7 @@ const byte EEP_RESERVEDA = 15;
 
 const byte EEP_MIN_BRIGHT = 16; // Minimum PWM for Inverter - When Brihhtness is 0%
 const byte EEP_MAX_BRIGHT = 17; // Maximum PWM for Inverter - When Brightness is 100%
-const byte EEP_DEPRECATED1 = 18; // OLD Number of percent brightness Increased or decreased
+const byte EEP_BRIGHT_INC = 18; // Number of percent brightness Increased or decreased
 const byte EEP_MIN_TEMP = 19; // Fan Control to Map Temp to Voltage
 const byte EEP_MAX_TEMP = 20; // Fan Control to Map Temp to Voltage
 const byte EEP_MIN_VOLT = 21; // Fan Control to Map Temp to Voltage
@@ -250,7 +251,7 @@ const byte EEP_MAX_VOLT = 22; // Fan Control to Map Temp to Voltage
 const byte EEP_DN_CAP_THR = 23; // Capacatance Treshold for Down Button
 const byte EEP_UP_CAP_THR = 24; // Capacatance Treshold for Up Button
 const byte EEP_CAP_SAMPLE = 25; // Number of Samples for Capacatance
-const byte EEP_DEPRECATED2 = 26; // The Old Model ID of the project this board implements
+const byte EEP_DEPRECATED1 = 26; // The Old Model ID of the project this board implements
 const byte EEP_MIN_LED_PWM = 27; // Minimum PWM Value for Front Panel LED Effects
 const byte EEP_MAX_LED_PWM = 28; // Maximum PWM Value for Front Panel LED Effects
 const byte EEP_INVERTER_STARTUP_DELAY = 29; // milliseconds before starting inverter 
@@ -271,6 +272,7 @@ prog_char string_P2[] PROGMEM = "Cycles-Power";
 prog_char string_P3[] PROGMEM = "Cycles-Sleep";
 prog_char string_02[] PROGMEM = "MinBright-PWM"; 
 prog_char string_03[] PROGMEM = "MaxBright-PWM"; 
+prog_char string_04[] PROGMEM = "BrightInc-%";
 prog_char string_05[] PROGMEM = "MinTemp-.01dc"; 
 prog_char string_06[] PROGMEM = "MaxTemp-.01dc";
 prog_char string_07[] PROGMEM = "MinVolt-.01v";
@@ -292,7 +294,7 @@ prog_char string_18[] PROGMEM = "InvertWarmDly";
 PROGMEM const char *eepName[] = { 
   string_VS, string_P0, string_P1, string_P2, string_P3,
   string_RES, string_RES, string_RES, string_RES, string_RES, string_RES, string_RES, string_RES, string_RES, string_RES, string_RES, 
-  string_02, string_03, string_DEP, string_05, string_06, 
+  string_02, string_03, string_04, string_05, string_06, 
   string_07, string_08, string_09, string_10, string_11, string_DEP, string_13, 
   string_14, string_15, string_16, string_17, string_18 };
 
@@ -331,7 +333,7 @@ void checkEepromConfiguration() {
     eepromWrite( EEP_RESERVEDA, ZERO); // 
     eepromWrite( EEP_MIN_BRIGHT, 60 ); // PWM
     eepromWrite( EEP_MAX_BRIGHT, 255 ); // PWM
-    eepromWrite( EEP_DEPRECATED1, ZERO ); // Brightness Increme
+    eepromWrite( EEP_BRIGHT_INC, 5 ); // Brightness Increme
     eepromWrite( EEP_MIN_TEMP, 0 ); // 100ths of a dreee e.g. 2000 = 20.0 degrees
     eepromWrite( EEP_MAX_TEMP, 2000 ); // 100ths of a dreee
     eepromWrite( EEP_MIN_VOLT, 250 ); // 100ths of a volt e.g. 330 = 3.3V
@@ -339,7 +341,7 @@ void checkEepromConfiguration() {
     eepromWrite( EEP_DN_CAP_THR, 150 ); // Down Threashhold
     eepromWrite( EEP_UP_CAP_THR, 150 ); // Up Threashold
     eepromWrite( EEP_CAP_SAMPLE, 200 ); // Samples
-    eepromWrite( EEP_DEPRECATED2, ZERO ); // Was Old Default Model ID
+    eepromWrite( EEP_DEPRECATED1, ZERO ); // Was Old Default Model ID
     eepromWrite( EEP_MIN_LED_PWM, 5 ); // Minimum Effects PWM for Front Panel LED
     eepromWrite( EEP_MAX_LED_PWM, 255 ); // Maximum Effects PWM for Front Panel LED
     eepromWrite( EEP_INVERTER_STARTUP_DELAY, 6000 ); // COLD Inverter Startup delay miliseconds
@@ -1569,13 +1571,13 @@ int setInverterBright(int bright) {
   return getInverterBright();
 }
   
-//byte incInverterBright() {
-//  return setInverterBright(getInverterBright()+eepromRead(EEP_BRIGHT_INC));
-//}
+byte incInverterBright() {
+  return setInverterBright(getInverterBright()+eepromRead(EEP_BRIGHT_INC));
+}
 
-//byte decInverterBright() {
-//  return setInverterBright(getInverterBright()-eepromRead(EEP_BRIGHT_INC));
-//}
+byte decInverterBright() {
+  return setInverterBright(getInverterBright()-eepromRead(EEP_BRIGHT_INC));
+}
 
 int getInverterBright() {
   return brightness;
