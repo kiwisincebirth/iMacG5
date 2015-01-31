@@ -29,8 +29,10 @@
 #include <PWMFrequency.h>
 #include <SimpleTimer.h>
 #include <FiniteStateMachine.h>
+
 #include <EEPROMex.h>
-#include <EEPROMVar.h>
+// NOTE: Please remove the "_EEPROMEX_DEBUG" 
+// #define in the source code of the library
 
 #ifdef CAPACITIVE
 #include <CapacitiveSensorDue.h>
