@@ -1219,11 +1219,11 @@ volatile unsigned long fan1TimeStart;
 volatile long fan2RotationCount;
 volatile unsigned long fan2TimeStart;
 
-void interrupFan1() {
+void interruptFan1() {
   fan1RotationCount ++;
 }
 
-void interrupFan2() {
+void interruptFan2() {
   fan2RotationCount ++;
 }
 
@@ -1233,7 +1233,7 @@ int getFanRPM1() {
   if (!started) {
     // Start Up the RPM by setting PN and attaching interrupt
     pinMode(FAN1_PWM_PIN,INPUT_PULLUP);    
-    attachInterrupt(FAN1_INTERRUPT,interrupFan1,FALLING);
+    attachInterrupt(FAN1_INTERRUPT,interruptFan1,FALLING);
     started = true;
   }
 
@@ -1249,13 +1249,13 @@ int getFanRPM2() {
   if (!started) {
     // Start Up the RPM by setting PN and attaching interrupt
     pinMode(FAN2_PWM_PIN,INPUT_PULLUP);    
-    attachInterrupt(FAN2_INTERRUPT,interrupFan2,FALLING);
+    attachInterrupt(FAN2_INTERRUPT,interruptFan2,FALLING);
     started = true;
   }
 
   double ret = fan2RotationCount /2L * 1000L * 60L / ( millis() - fan2TimeStart );
-  fan1RotationCount = 0;
-  fan1TimeStart = millis();
+  fan2RotationCount = 0;
+  fan2TimeStart = millis();
   return  ret;
 }
 
