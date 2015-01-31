@@ -20,6 +20,7 @@
  */
 
 //#define DEBUG
+#define COMMANDABLE
 //#define CAPACITIVE
 #define TEMPERATURE
 
@@ -87,6 +88,9 @@
 // REVISION HISTORY
 // ================
 // 1.0 - 26/07/2014 - Initial Stable Feature complete Release
+// 1.1 - 31/01/2015 - Added support for RPM Fan Input, future feature
+// 1.1 - 31/01/2015 - Simplified EEPROM Code, Long support Only.
+// 1.1 - 31/01/2015 - Added addition ifdefs to reduce size of bnary.
 //
 // --------------
 // Future Futures
@@ -404,6 +408,8 @@ String eepromName(byte location) {
 
 // -------------------------------
 
+#ifdef COMMANDABLE
+
 /**
  * Process a command from the serial port
  */
@@ -501,6 +507,8 @@ void eepromInitCommand() {
     
     Serial.println(F("Flashed."));
 }
+
+#endif
 
 //
 // ============================================
@@ -875,6 +883,8 @@ void deactivateCapTouchBright() {
 
 // PRIVATE ------------------
 
+#ifdef COMMANDABLE
+
 /*
  * Handles processing command from Serial API
  */
@@ -941,6 +951,8 @@ void processCommandCapacitiveCalibrate() {
 // enable main timer.
 
 }
+
+#endif
 
 // Main Touch Sensor Reading
 void touchControl() {
@@ -1011,6 +1023,8 @@ void deactivateTempFanControl() {
 
 // PRIVATE ------------------
 
+#ifdef COMMANDABLE
+
 /*
  * Handles processing command from Serial API
  */
@@ -1041,6 +1055,8 @@ void processCommandFan(String subCmd, String extraCmd) {
     Serial.println(F("Fan Command Unknown: FM (max), FA (activate), FD (deactivate), FL (log), FO (log off)"));
   }  
 }
+
+#endif
 
 void readTempSetTargetVolt() {
  
@@ -1076,6 +1092,8 @@ float computeTempFactor( float temp ) {
 
 // PRIVATE ------------------- MONITORING INFO
 
+#ifdef COMMANDABLE
+
 void printFanDetails() {
     Serial.print(getAmbientTemp());
     Serial.print(F("\t"));
@@ -1096,37 +1114,6 @@ void printFanDetails() {
 
 int tempFanMonitorTimer = -1;
 
-volatile long fan1RotationCount;
-volatile unsigned long fan1TimeStart;
-volatile long fan2RotationCount;
-volatile unsigned long fan2TimeStart;
-
-void interrupFan1() {
-  fan1RotationCount ++;
-}
-
-void interrupFan2() {
-  fan2RotationCount ++;
-}
-
-int getFanRPM1() {
-  //if ( fan1RotationCount ) return 0;
-  double ret = fan1RotationCount /2L *1000L * 60L / ( millis() - fan1TimeStart );
-  //fan1RotationCount = -1;
-  fan1RotationCount = 0;
-  fan1TimeStart = millis();
-  return  ret;
-}
-
-int getFanRPM2() {
-  //if ( fan2RotationCount<1 ) return 0;
-  double ret = fan2RotationCount /2L * 1000L * 60L / ( millis() - fan2TimeStart );
-  //fan2RotationCount = -1;
-  fan2RotationCount = 0;
-  fan2TimeStart = millis();
-  return  ret;
-}
-
 /**
  * Activate the controller, and set the fan speed based on Temperature
  */
@@ -1134,21 +1121,12 @@ void activateTempFanMonitor() {
   
   if ( tempFanMonitorTimer == -1 ) { 
     
-    pinMode(FAN1_PWM_PIN,INPUT_PULLUP);    
-    pinMode(FAN2_PWM_PIN,INPUT_PULLUP);    
-
-    // interrupts
-    attachInterrupt(FAN1_INTERRUPT,interrupFan1,FALLING);
-    attachInterrupt(FAN2_INTERRUPT,interrupFan2,FALLING);
-    
     // setup a timer that runs every 500 ms - To Read Temperature
     tempFanMonitorTimer = timer.setInterval(3000,printFanDetails);
   }
 
-  fan1RotationCount = 0;
-  fan2RotationCount = 0;
-  fan1TimeStart = millis();
-  fan2TimeStart = millis();
+  getFanRPM1();
+  getFanRPM2();
 
   // make sure the Timer Thread is active
   timer.enable(tempFanMonitorTimer);    
@@ -1163,6 +1141,7 @@ void deactivateTempFanMonitor() {
   if (tempFanMonitorTimer >=0 ) timer.disable(tempFanMonitorTimer);  
 }
 
+#endif
 
 //
 // =======
@@ -1225,6 +1204,57 @@ long getUpSensorReading    () { return 0; }
 void calibrateSensorReading() { }
 
 #endif
+
+//
+// ----------
+// RPM INPUTS
+// ----------
+//
+
+volatile long fan1RotationCount;
+volatile unsigned long fan1TimeStart;
+volatile long fan2RotationCount;
+volatile unsigned long fan2TimeStart;
+
+void interrupFan1() {
+  fan1RotationCount ++;
+}
+
+void interrupFan2() {
+  fan2RotationCount ++;
+}
+
+int getFanRPM1() {
+  
+  static boolean started = false;
+  if (!started) {
+    // Start Up the RPM by setting PN and attaching interrupt
+    pinMode(FAN1_PWM_PIN,INPUT_PULLUP);    
+    attachInterrupt(FAN1_INTERRUPT,interrupFan1,FALLING);
+    started = true;
+  }
+
+  double ret = fan1RotationCount /2L *1000L * 60L / ( millis() - fan1TimeStart );
+  fan1RotationCount = 0;
+  fan1TimeStart = millis();
+  return  ret;
+}
+
+int getFanRPM2() {
+
+  static boolean started = false;
+  if (!started) {
+    // Start Up the RPM by setting PN and attaching interrupt
+    pinMode(FAN2_PWM_PIN,INPUT_PULLUP);    
+    attachInterrupt(FAN2_INTERRUPT,interrupFan2,FALLING);
+    started = true;
+  }
+
+  double ret = fan2RotationCount /2L * 1000L * 60L / ( millis() - fan2TimeStart );
+  fan1RotationCount = 0;
+  fan1TimeStart = millis();
+  return  ret;
+}
 
 //
 // ----------
@@ -1538,13 +1568,13 @@ int setInverterBright(int bright) {
   return getInverterBright();
 }
   
-byte incInverterBright() {
-  return setInverterBright(getInverterBright()+eepromRead(EEP_BRIGHT_INC));
-}
+//byte incInverterBright() {
+//  return setInverterBright(getInverterBright()+eepromRead(EEP_BRIGHT_INC));
+//}
 
-byte decInverterBright() {
-  return setInverterBright(getInverterBright()-eepromRead(EEP_BRIGHT_INC));
-}
+//byte decInverterBright() {
+//  return setInverterBright(getInverterBright()-eepromRead(EEP_BRIGHT_INC));
+//}
 
 int getInverterBright() {
   return brightness;
@@ -1652,16 +1682,16 @@ void processCommandBrightness(String subCmd, String extraCmd) {
     // Deactivate Inverter
     deactivateInverter();
     
-  } else if (subCmd.equals("+")) {
-    // Deactivate Inverter
-    incInverterBright();
-    
-  } else if (subCmd.equals("-")) {
-    // Deactivate Inverter
-    decInverterBright();
+//  } else if (subCmd.equals("+")) {
+//    // Deactivate Inverter
+//    incInverterBright();
+//    
+//  } else if (subCmd.equals("-")) {
+//    // Deactivate Inverter
+//    decInverterBright();
     
   } else {
-    Serial.println(F("Brightness Command Unknown: BR (read), BW (write), BA (activate), BD (deactivate), B+, B- (change)"));
+    Serial.println(F("Brightness Command Unknown: BR (read), BW (write), BA (activate), BD (deactivate)"));
   }
 }
 
@@ -1998,6 +2028,8 @@ float computeRampUp( unsigned long timeInCycle ) {
 
 // -----------------------------------------
 
+#ifdef COMMANDABLE
+
 /*
  * Handles processing command from Serial API
  */
@@ -2013,6 +2045,8 @@ void processCommandLed(String subCmd, String extraCmd) {
     Serial.println(F("LED Command Unknown: F n (flash n times)"));
   }
 }
+
+#endif
 
 //
 // =====================
@@ -2084,6 +2118,8 @@ void processCommand(String cmd) {
   if (firstCmd.equals("B")) {
     processCommandBrightness(secondCmd,extraCmd);
   
+#ifdef COMMANDABLE
+  
   } else if (firstCmd.equals("C")) {
     processCommandCapacitive(secondCmd,extraCmd);
 
@@ -2101,9 +2137,14 @@ void processCommand(String cmd) {
 
   } else {
     Serial.println(F("Command Unknown: B (brighness), C (capacitive), E (eeprom), F (fans), L (front led), S (system)"));
+    
+#endif    
+
   }
   
 }
+
+#ifdef COMMANDABLE
 
 void processCommandSystem(String subCmd, String extraCmd) {
   
@@ -2158,6 +2199,8 @@ void processCommandSystem(String subCmd, String extraCmd) {
     Serial.println(F("System Command Unknown: R (ram), U (uptime), T (timers)"));
   }
 }
+
+#endif
 
 //
 // =================================
