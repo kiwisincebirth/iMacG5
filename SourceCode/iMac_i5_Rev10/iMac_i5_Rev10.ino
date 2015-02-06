@@ -575,6 +575,9 @@ void startupAndTransition() {
 // ACTIVE STATE
 //
 
+unsigned long millsOfLastStartup = millis();
+unsigned long millsOfLastWakFromSleep = millis();
+
 void enterActiveMode() {
   
   // DEBUG
@@ -592,6 +595,7 @@ void enterActiveMode() {
     
     // count the power cycle
     incrementCounter(EEP_CYC_POWER);
+    millsOfLastStartup = millis();
     
     // read the startup dealy - before powering on the LCD
     int invDelay = eepromRead(EEP_INVERTER_STARTUP_DELAY);
@@ -675,6 +679,8 @@ void leaveSleepMode() {
   
   // count the sleep cycle
   incrementCounter(EEP_CYC_SLEEP);
+  
+  millsOfLastWakFromSleep = millis();
 }
 
 //
@@ -2133,9 +2139,32 @@ void processCommandSystem(String subCmd, String extraCmd) {
     Serial.println(F(" of 2560 bytes"));
     
   } else if (subCmd.equals("U")) {
-    // System UpTime in seconds
     
-    unsigned long mils = millis();
+    Serial.print(F("SMC UpTime "));
+    printTime(millis());
+    Serial.println();
+    
+    Serial.print(F("PowerOn Time "));
+    printTime(millis()-millsOfLastStartup);
+    Serial.println();
+
+    Serial.print(F("Wake Time "));
+    printTime(millis()-millsOfLastWakFromSleep);
+    Serial.println();
+
+  } else if (subCmd.equals("T")) {
+    // System Timers in-use
+    Serial.print(F("Timers In Use "));
+    Serial.println(timer.getNumTimers());    
+    Serial.print(F("Timers Unused "));
+    Serial.println(timer.getNumAvailableTimers());    
+
+  } else {
+    Serial.println(F("System Command Unknown: R (ram), U (uptime), T (timers)"));
+  }
+}
+
+void printTime( unsigned long mils ) {
     unsigned long secs = mils / 1000L;
     mils = mils - (secs*1000);
     unsigned long mins = secs / 60L;
@@ -2145,7 +2174,7 @@ void processCommandSystem(String subCmd, String extraCmd) {
     int days = hrs / 24;
     hrs = hrs - (days*24);
     
-    Serial.print(F("UpTime "));
+    
     if (days>0) {
       Serial.print(days);
       Serial.print(F(" Days "));
@@ -2164,18 +2193,6 @@ void processCommandSystem(String subCmd, String extraCmd) {
       if (mils<10) Serial.print(ZERO_CHAR);  
       Serial.print(mils);       
     }
-    Serial.println();       
-
-  } else if (subCmd.equals("T")) {
-    // System Timers in-use
-    Serial.print(F("Timers In Use "));
-    Serial.println(timer.getNumTimers());    
-    Serial.print(F("Timers Unused "));
-    Serial.println(timer.getNumAvailableTimers());    
-
-  } else {
-    Serial.println(F("System Command Unknown: R (ram), U (uptime), T (timers)"));
-  }
 }
 
 #endif
