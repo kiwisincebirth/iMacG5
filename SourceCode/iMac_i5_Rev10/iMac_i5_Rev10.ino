@@ -228,9 +228,9 @@ const byte EEP_BRIGHT = 1; // brghtness Setting 0 - 100 %
 const byte EEP_CYC_SMC = 2; // SMC Power / Rest Cycles (StartUp)
 const byte EEP_CYC_POWER = 3; // CPU Power Cycles (Power Up)
 const byte EEP_CYC_SLEEP = 4; // CPU Sleep Cycles (Wake)
+const byte EEP_TIM_SYSTEM = 5; // System Uptime
+const byte EEP_TIM_LCD = 6; //LCD Power On Time
 
-const byte EEP_RESERVED0 = 5; 
-const byte EEP_RESERVED1 = 6; 
 const byte EEP_RESERVED2 = 7; 
 const byte EEP_RESERVED3 = 8; 
 const byte EEP_RESERVED4 = 9; 
@@ -270,6 +270,8 @@ prog_char string_P0[] PROGMEM = "Bright-%";
 prog_char string_P1[] PROGMEM = "Cycles-SMC";
 prog_char string_P2[] PROGMEM = "Cycles-Power";
 prog_char string_P3[] PROGMEM = "Cycles-Sleep";
+prog_char string_P4[] PROGMEM = "Time-Power";
+prog_char string_P5[] PROGMEM = "Time-LCD";
 prog_char string_02[] PROGMEM = "MinBright-PWM"; 
 prog_char string_03[] PROGMEM = "MaxBright-PWM"; 
 prog_char string_04[] PROGMEM = "BrightInc-%";
@@ -292,8 +294,8 @@ prog_char string_18[] PROGMEM = "InvertWarmDly";
 //
 
 PROGMEM const char *eepName[] = { 
-  string_VS, string_P0, string_P1, string_P2, string_P3,
-  string_RES, string_RES, string_RES, string_RES, string_RES, string_RES, string_RES, string_RES, string_RES, string_RES, string_RES, 
+  string_VS, string_P0, string_P1, string_P2, string_P3, string_P4, string_P5,
+  string_RES, string_RES, string_RES, string_RES, string_RES, string_RES, string_RES, string_RES, string_RES, 
   string_02, string_03, string_04, string_05, string_06, 
   string_07, string_08, string_09, string_10, string_11, string_DEP, string_13, 
   string_14, string_15, string_16, string_17, string_18 };
@@ -320,8 +322,8 @@ void checkEepromConfiguration() {
     eepromWrite( EEP_CYC_SMC, ZERO);   // 
     eepromWrite( EEP_CYC_POWER, ZERO); // 
     eepromWrite( EEP_CYC_SLEEP, ZERO); // 
-    eepromWrite( EEP_RESERVED0, ZERO); // 
-    eepromWrite( EEP_RESERVED1, ZERO); // 
+    eepromWrite( EEP_TIM_SYSTEM, ZERO); // 
+    eepromWrite( EEP_TIM_LCD, ZERO); // 
     eepromWrite( EEP_RESERVED2, ZERO); // 
     eepromWrite( EEP_RESERVED3, ZERO); // 
     eepromWrite( EEP_RESERVED4, ZERO); // 
@@ -376,8 +378,12 @@ int eepromWrite(byte location, long value) {
   return EEPROM.updateLong( eepromLocation(location), value );
 }
 
-void incrementCounter(byte location) {
-  eepromWrite(location, eepromRead(location)+1);
+void inline incrementCounter(byte location) {
+  addToCounter(location, 1);
+}
+
+void addToCounter(byte location,unsigned long value) {
+  eepromWrite(location, eepromRead(location)+value);
 }
 
 // ------------------ PRIVATE
@@ -1550,6 +1556,7 @@ float readVoltage( int sensorPin ) {
 // locally cached brightness from EEPROM
 int brightness = 100; 
 boolean inverterActive = true;
+unsigned long millsWhenLCDActivated = millis();
 int eepromBrightWriteTimer = -1;
 
 // BRIGHTNESS ------------------
@@ -1603,6 +1610,7 @@ void activateInverter() {
     DEBUG_PRINTF("INVERTER Activated");
       
     inverterActive = true;
+    millsWhenLCDActivated = millis();
     setInverterPWMBrightness();
   }
 }
@@ -1619,6 +1627,7 @@ void deactivateInverter() {
     DEBUG_PRINTF("INVERTER Deactivated");
 
     inverterActive = false;
+    addToCounter(EEP_TIM_LCD,(millis()-millsWhenLCDActivated)/1000L );
     setInverterPWMBrightness();
   }
 }
@@ -1798,6 +1807,7 @@ void initiateTimedChime( long delayBefore ) {
 //
 
 boolean psuIsActive = true;
+unsigned long millsWhenPSUActivated = millis();
 
 void activatePSU () {
 
@@ -1805,6 +1815,7 @@ void activatePSU () {
     digitalWrite(PSU_DEACTIVATE_POUT,LOW);
     pinMode(PSU_DEACTIVATE_POUT,INPUT);
     psuIsActive = true;
+    millsWhenPSUActivated = millis();
     
     DEBUG_PRINTF("PSU Activated");
   }
@@ -1816,6 +1827,7 @@ void deactivatePSU () {
     pinMode(PSU_DEACTIVATE_POUT,OUTPUT);
     digitalWrite(PSU_DEACTIVATE_POUT,HIGH);
     psuIsActive = false;
+    addToCounter(EEP_TIM_SYSTEM,(millis()-millsWhenPSUActivated)/1000L );
     
     DEBUG_PRINTF("PSU Deactivated");
   }
@@ -2150,16 +2162,26 @@ void processCommandSystem(String subCmd, String extraCmd) {
     
   } else if (subCmd.equals("U")) {
     
-    Serial.print(F("SMC   UpTime "));
-    printTime(millis());
+
+    
+    Serial.print(F("Wake     Time "));
+    printTime((millis()-millsOfLastWakFromSleep)/1000L);
     Serial.println();
     
-    Serial.print(F("PowerOn Time "));
-    printTime(millis()-millsOfLastStartup);
+    Serial.print(F("PowerOn  Time "));
+    printTime((millis()-millsOfLastStartup)/1000L);
     Serial.println();
 
-    Serial.print(F("Wake    Time "));
-    printTime(millis()-millsOfLastWakFromSleep);
+    Serial.print(F("Total PowerOn "));
+    printTime((millis()-millsWhenPSUActivated)/1000L+eepromRead(EEP_TIM_SYSTEM));
+    Serial.println();
+
+    Serial.print(F("Total LCDTime "));
+    printTime((millis()-millsWhenLCDActivated)/1000L+eepromRead(EEP_TIM_LCD));
+    Serial.println();
+    
+    Serial.print(F("SMC Up - Time "));
+    printTime(millis()/1000L);
     Serial.println();
 
   } else if (subCmd.equals("T")) {
@@ -2170,21 +2192,18 @@ void processCommandSystem(String subCmd, String extraCmd) {
     Serial.println(timer.getNumAvailableTimers());    
 
   } else {
-    Serial.println(F("System Command Unknown: R (ram), C (counters), U (uptime), T (timers)"));
+    Serial.println(F("System Command Unknown: R (ram), C (cycles), U (uptime), T (timers)"));
   }
 }
 
-void printTime( unsigned long mils ) {
-    unsigned long secs = mils / 1000L;
-    mils = mils - (secs*1000);
+void printTime( unsigned long secs ) {
+  
     unsigned long mins = secs / 60L;
     secs = secs - (mins*60);
     unsigned long hrs = mins / 60L;
     mins = mins - (hrs*60);
     int days = hrs / 24;
-    hrs = hrs - (days*24);
-    
-    
+    hrs = hrs - (days*24);  
     if (days>0) {
       Serial.print(days);
       Serial.print(F(" Days "));
@@ -2194,14 +2213,10 @@ void printTime( unsigned long mils ) {
     Serial.print(COLON);    
     if (mins<10) Serial.print(ZERO_CHAR);
     Serial.print(mins);
-    Serial.print(COLON);    
-    if (secs<10) Serial.print(ZERO_CHAR);
-    Serial.print(secs);  
-    if (mins<10) {  
-      Serial.print(STOP);  
-      if (mils<100) Serial.print(ZERO_CHAR);  
-      if (mils<10) Serial.print(ZERO_CHAR);  
-      Serial.print(mils);       
+    if (days==0) {
+      Serial.print(COLON);    
+      if (secs<10) Serial.print(ZERO_CHAR);
+      Serial.print(secs);  
     }
 }
 
