@@ -2029,28 +2029,6 @@ float computeRampUp( unsigned long timeInCycle ) {
   return computeTrigFactor((float)timeInCycle/ledEffectDuration);
 }
 
-// -----------------------------------------
-
-#ifdef COMMANDABLE
-
-/*
- * Handles processing command from Serial API
- */
-void processCommandLed(String subCmd, String extraCmd) {
-  
-  if (subCmd.equals("F")) {
-
-    byte flashes = extraCmd.toInt();
-    if (flashes < 1 ) flashes = 1;
-    activateFrontPanelFlash(flashes);
-
-  } else {
-    Serial.println(F("LED Command Unknown: F n (flash n times)"));
-  }
-}
-
-#endif
-
 //
 // =====================
 // USB SERIAL CONTROLLER
@@ -2131,15 +2109,12 @@ void processCommand(String cmd) {
     
   } else if (firstCmd.equals("F")) {
     processCommandFan(secondCmd,extraCmd);
-  
-  } else if (firstCmd.equals("L")) {
-    processCommandLed(secondCmd,extraCmd);
 
   } else if (firstCmd.equals("S")) {
     processCommandSystem(secondCmd,extraCmd);
 
   } else {
-    Serial.println(F("Command Unknown: B (brighness), C (capacitive), E (eeprom), F (fans), L (front led), S (system)"));
+    Serial.println(F("Command Unknown: B (brighness), C (capacitive), E (eeprom), F (fans), S (system)"));
     
 #endif    
 
