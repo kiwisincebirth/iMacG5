@@ -395,7 +395,7 @@ boolean isLocationException(byte location) {
 }
 
 boolean isProtectedException(byte location) {
-  return location < 1;
+  return location <= 16;
 }
 
 int inline eepromLocation(byte location) {
