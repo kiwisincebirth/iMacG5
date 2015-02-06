@@ -446,7 +446,7 @@ void eepromReadCommand(String extraCmd) {
   if (location>0 && !isLocationException(location) ) {
     eepromReadCommand(location);
   } else {
-    for (byte i = 0;i<sizeofEeprom();i++) {
+    for (byte i = 16;i<sizeofEeprom();i++) {
       eepromReadCommand(i);
     }
   }
@@ -2133,14 +2133,24 @@ void processCommand(String cmd) {
 void processCommandSystem(String subCmd, String extraCmd) {
   
   if (subCmd.equals("R")) {
+    
     // System Ram Available in bytes. Leonamrdo has 2.5Kbyes
     Serial.print(F("FreeRAM "));
     Serial.print(freeRam());    
     Serial.println(F(" of 2560 bytes"));
     
+  } else if (subCmd.equals("C")) {
+    
+    Serial.print("SMC Power Cycles ");
+    Serial.println(eepromRead(EEP_CYC_SMC));
+    Serial.print("Power On  Cycles ");
+    Serial.println(eepromRead(EEP_CYC_POWER));
+    Serial.print("Sleep     Cycles ");
+    Serial.println(eepromRead(EEP_CYC_SLEEP));
+    
   } else if (subCmd.equals("U")) {
     
-    Serial.print(F("SMC UpTime "));
+    Serial.print(F("SMC   UpTime "));
     printTime(millis());
     Serial.println();
     
@@ -2148,7 +2158,7 @@ void processCommandSystem(String subCmd, String extraCmd) {
     printTime(millis()-millsOfLastStartup);
     Serial.println();
 
-    Serial.print(F("Wake Time "));
+    Serial.print(F("Wake    Time "));
     printTime(millis()-millsOfLastWakFromSleep);
     Serial.println();
 
@@ -2160,7 +2170,7 @@ void processCommandSystem(String subCmd, String extraCmd) {
     Serial.println(timer.getNumAvailableTimers());    
 
   } else {
-    Serial.println(F("System Command Unknown: R (ram), U (uptime), T (timers)"));
+    Serial.println(F("System Command Unknown: R (ram), C (counters), U (uptime), T (timers)"));
   }
 }
 
