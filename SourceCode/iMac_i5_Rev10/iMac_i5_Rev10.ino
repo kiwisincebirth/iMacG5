@@ -230,8 +230,8 @@ const byte EEP_CYC_POWER = 3; // CPU Power Cycles (Power Up)
 const byte EEP_CYC_SLEEP = 4; // CPU Sleep Cycles (Wake)
 const byte EEP_TIM_SYSTEM = 5; // System Uptime
 const byte EEP_TIM_LCD = 6; //LCD Power On Time
+const byte EEP_TIM_SLEEP = 7; //LCD Power On Time
 
-const byte EEP_RESERVED2 = 7; 
 const byte EEP_RESERVED3 = 8; 
 const byte EEP_RESERVED4 = 9; 
 const byte EEP_RESERVED5 = 10; 
@@ -272,6 +272,8 @@ prog_char string_P2[] PROGMEM = "Cycles-Power";
 prog_char string_P3[] PROGMEM = "Cycles-Sleep";
 prog_char string_P4[] PROGMEM = "Time-Power";
 prog_char string_P5[] PROGMEM = "Time-LCD";
+prog_char string_P6[] PROGMEM = "Time-Sleep";
+
 prog_char string_02[] PROGMEM = "MinBright-PWM"; 
 prog_char string_03[] PROGMEM = "MaxBright-PWM"; 
 prog_char string_04[] PROGMEM = "BrightInc-%";
@@ -294,10 +296,10 @@ prog_char string_18[] PROGMEM = "InvertWarmDly";
 //
 
 PROGMEM const char *eepName[] = { 
-  string_VS, string_P0, string_P1, string_P2, string_P3, string_P4, string_P5,
-  string_RES, string_RES, string_RES, string_RES, string_RES, string_RES, string_RES, string_RES, string_RES, 
-  string_02, string_03, string_04, string_05, string_06, 
-  string_07, string_08, string_09, string_10, string_11, string_DEP, string_13, 
+  string_VS, string_P0, string_P1, string_P2, string_P3, string_P4, string_P5, string_P6, 
+  string_RES, string_RES, string_RES, string_RES, string_RES, string_RES, string_RES, string_RES, 
+  string_02, string_03, string_04, string_05, string_06, string_07, 
+  string_08, string_09, string_10, string_11, string_DEP, string_13, 
   string_14, string_15, string_16, string_17, string_18 };
 
 /**
@@ -324,7 +326,7 @@ void checkEepromConfiguration() {
     eepromWrite( EEP_CYC_SLEEP, ZERO); // 
     eepromWrite( EEP_TIM_SYSTEM, ZERO); // 
     eepromWrite( EEP_TIM_LCD, ZERO); // 
-    eepromWrite( EEP_RESERVED2, ZERO); // 
+    eepromWrite( EEP_TIM_SLEEP, ZERO); // 
     eepromWrite( EEP_RESERVED3, ZERO); // 
     eepromWrite( EEP_RESERVED4, ZERO); // 
     eepromWrite( EEP_RESERVED5, ZERO); // 
@@ -659,10 +661,14 @@ void leaveActiveMode() {
 // SLEEP STATE 
 //
 
+unsigned long timeEnteringSleep;
+
 void enterSleepMode() {
 
   // DEBUG
   DEBUG_PRINTF("ENTER-SLEEP");
+  
+  timeEnteringSleep = millis();
 
   activateFrontPanelLEDBreath();
 }
@@ -685,6 +691,7 @@ void leaveSleepMode() {
   
   // count the sleep cycle
   incrementCounter(EEP_CYC_SLEEP);
+  addToCounter(EEP_TIM_SLEEP,(millis()-timeEnteringSleep)/1000L);
   
   millsOfLastWakFromSleep = millis();
 }
@@ -2164,23 +2171,27 @@ void processCommandSystem(String subCmd, String extraCmd) {
     
 
     
-    Serial.print(F("Wake     Time "));
+    Serial.print(F("Wake    Time "));
     printTime((millis()-millsOfLastWakFromSleep)/1000L);
     Serial.println();
     
-    Serial.print(F("PowerOn  Time "));
+    Serial.print(F("T Wake  Time "));
+    printTime((millis()-millsWhenPSUActivated)/1000L+eepromRead(EEP_TIM_SYSTEM)-eepromRead(EEP_TIM_SLEEP));
+    Serial.println();
+    
+    Serial.print(F("PowerOn Time "));
     printTime((millis()-millsOfLastStartup)/1000L);
     Serial.println();
 
-    Serial.print(F("Total PowerOn "));
+    Serial.print(F("T Power Time "));
     printTime((millis()-millsWhenPSUActivated)/1000L+eepromRead(EEP_TIM_SYSTEM));
     Serial.println();
 
-    Serial.print(F("Total LCDTime "));
+    Serial.print(F("Tot LCD Time "));
     printTime((millis()-millsWhenLCDActivated)/1000L+eepromRead(EEP_TIM_LCD));
     Serial.println();
     
-    Serial.print(F("SMC Up - Time "));
+    Serial.print(F("SMC Up  Time "));
     printTime(millis()/1000L);
     Serial.println();
 
