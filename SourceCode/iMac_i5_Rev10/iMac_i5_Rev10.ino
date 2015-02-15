@@ -1,3 +1,8 @@
+// BOF preprocessor bug prevent - insert me on top of your arduino-code
+// See: http://subethasoftware.com/2013/04/09/arduino-compiler-problem-with-ifdefs-solved/
+#if 1
+__asm volatile ("nop");
+#endif
 
 /**
  * System Management Controller Kiwi's iMac G5
