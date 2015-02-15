@@ -19,13 +19,13 @@
  * Written : July 2014
  */
 
-//#define DEBUG
-#define COMMANDABLE
-#define CAPACITIVE
-#define TEMPERATURE
+//#define DEBUG // enables debig mode
+#define COMMANDABLE // has all commands not just brightness
+//#define CAPACITIVE // support for cap touch sensors
+#define TEMPERATURE // temperature intput for fans
+#define LEGACY_BOARD // supports the legacy fan control LM317, proto board  
 
 #include <DebugUtils.h>
-
 #include <PWMFrequency.h>
 #include <SimpleTimer.h>
 #include <FiniteStateMachine.h>
@@ -94,6 +94,7 @@
 // 1.1 - 31/01/2015 - Added support for RPM Fan Input, future feature
 // 1.1 - 31/01/2015 - Simplified EEPROM Code, Long support Only.
 // 1.1 - 31/01/2015 - Added addition ifdefs to reduce size of bnary.
+// 1.2 - 15/02/2015 - Started to add support for RPM Fan Control
 //
 // --------------
 // Future Futures
@@ -126,22 +127,11 @@
 // Analog Pins can be used a digital ( refer to them as A0, A1, ...)
 //
 
-// -------------------- POWER MANAGEMENT
+#ifdef LEGACY_BOARD
 
-// D0 RXi Unused
-
-// Chime Output Connected to PLAYE, high going Level.
-//const byte CHIME_POUT = 0; // TXO
-
-// ---------------------- FAN SPEED PINS
-
-// The Pins For Fan Input
-const byte FAN1_PWM_PIN = 0; 
-const byte FAN2_PWM_PIN = 1; 
-
-// Interrupts that fans are attached to.
-const byte FAN1_INTERRUPT = 2; 
-const byte FAN2_INTERRUPT = 3; 
+//
+// LEGACY PINS
+//
 
 // -------------- POWER DETECTION CONTROL
 
@@ -180,6 +170,73 @@ const byte INVERTER_POUT = 10;
 const byte TOUCH_COMMON_PIN_CAP = 2;
 const byte TOUCH_DOWN_PIN_CAP = 7;
 const byte TOUCH_UP_PIN_CAP = 8;
+
+// -------------------- CHIME
+
+// Chime Output --->>>  HIGH <<<---  Level OUTPUT
+const byte CHIME_POUT = 1; // TXO
+
+#else
+
+//
+// MODERN PINS
+//
+
+// -------------- POWER DETECTION CONTROL
+
+// Power Switch Control Pins
+const byte POWER_SWITCH_PIN_POUT = A1; 
+ 
+// Main PSU Control to de-active ATX PSU
+const byte PSU_DEACTIVATE_POUT = 4;
+
+// Power Notification
+const byte SLEEP_LED_POUT = 3;
+
+// Pwer State Sense Pins
+const byte NUC_POWER_LED_VCC_PIN = 14;
+const byte NUC_POWER_LED_GND_PIN = 15;
+
+// ---------------------- FAN SPEED PINS
+
+// The Pins For Fan Input
+const byte FAN1_PWM_PIN = 1; 
+const byte FAN2_PWM_PIN = 2; 
+const byte FAN3_PWM_PIN = 7; 
+
+// Interrupts that fans are attached to.
+const byte FAN1_INTERRUPT = 3; 
+const byte FAN2_INTERRUPT = 1; 
+const byte FAN3_INTERRUPT = 4; 
+
+// --------------------- FAN CONTROL
+
+// Fan Control Outputs
+const byte FAN1_CONTROL_POUT = 9;
+const byte FAN2_CONTROL_POUT = 6;
+const byte FAN3_CONTROL_POUT = 10;
+
+// Digital Pin For Temps
+const byte TEMP_PIN = A2;
+
+// -------------------- INVERTER 
+
+// Inverter Brigtness PWM Out
+const byte INVERTER_POUT = 5; 
+
+// --------------------- CAP TOUCH
+
+// Up and down capacitive touch broghtness pins
+const byte TOUCH_COMMON_PIN_CAP = A0;
+const byte TOUCH_DOWN_PIN_CAP = 16;
+const byte TOUCH_UP_PIN_CAP = 8;
+
+// -------------------- CHIME
+
+// Chime Output LOW Level OUTPUT
+const byte CHIME_POUT = A3;
+
+#endif
 
 // 
 // ========================================
@@ -598,10 +655,11 @@ void enterActiveMode() {
   // If Active State is coming from A BOOTUP state (either COLD or WARM)
   if ( fsm.wasInState(STATE_POWERUP) || fsm.wasInState(STATE_POWERDOWN) ) {
     
-    // signal the chime in 100 millis
+    // signal the chime 
+    // TODO The Chime delaty could be in EEPROM
     initiateTimedChime(ONE_HUNDRED_MILLIS);
     
-    // count the power cycle
+    // count the power cycle, and reset the startup time
     incrementCounter(EEP_CYC_POWER);
     millsOfLastStartup = millis();
     
@@ -1067,11 +1125,15 @@ void processCommandFan(String subCmd, String extraCmd) {
     Serial.print(F("Fans Set To Max"));
     setFanTargetVolt( 12.0f ); // MAXIMUM FANS
 
+/*
+
   } else if (subCmd.equals("L")) {
     activateTempFanMonitor();
     
   } else if (subCmd.equals("O")) {
     deactivateTempFanMonitor();
+
+*/
 
   } else {
     Serial.println(F("Fan Command Unknown: FM (max), FA (activate), FD (deactivate), FL (log), FO (log off)"));
@@ -1116,6 +1178,7 @@ float computeTempFactor( float temp ) {
 
 #ifdef COMMANDABLE
 
+/*
 void printFanDetails() {
     Serial.print(getAmbientTemp());
     Serial.print(F("\t"));
@@ -1136,9 +1199,7 @@ void printFanDetails() {
 
 int tempFanMonitorTimer = -1;
 
-/**
- * Activate the controller, and set the fan speed based on Temperature
- */
+// Activate the controller, and set the fan speed based on Temperature
 void activateTempFanMonitor() {
   
   if ( tempFanMonitorTimer == -1 ) { 
@@ -1154,14 +1215,14 @@ void activateTempFanMonitor() {
   timer.enable(tempFanMonitorTimer);    
 }
 
-/**
- * Deactive the controller, and turn the fans off
- */
+// Deactive the controller, and turn the fans off
 void deactivateTempFanMonitor() {
 
   // disable the timer if it exists
   if (tempFanMonitorTimer >=0 ) timer.disable(tempFanMonitorTimer);  
 }
+
+*/
 
 #endif
 
@@ -1227,6 +1288,8 @@ void calibrateSensorReading() { }
 
 #endif
 
+#ifndef LEGACY_BOARD
+
 //
 // ----------
 // RPM INPUTS
@@ -1237,6 +1300,8 @@ volatile long fan1RotationCount;
 volatile unsigned long fan1TimeStart;
 volatile long fan2RotationCount;
 volatile unsigned long fan2TimeStart;
+volatile long fan3RotationCount;
+volatile unsigned long fan3TimeStart;
 
 void interruptFan1() {
   fan1RotationCount ++;
@@ -1244,6 +1309,10 @@ void interruptFan1() {
 
 void interruptFan2() {
   fan2RotationCount ++;
+}
+
+void interruptFan3() {
+  fan3RotationCount ++;
 }
 
 int getFanRPM1() {
@@ -1277,6 +1346,24 @@ int getFanRPM2() {
   fan2TimeStart = millis();
   return  ret;
 }
+
+int getFanRPM3() {
+
+  static boolean started = false;
+  if (!started) {
+    // Start Up the RPM by setting PN and attaching interrupt
+    pinMode(FAN3_PWM_PIN,INPUT_PULLUP);    
+    attachInterrupt(FAN3_INTERRUPT,interruptFan3,FALLING);
+    started = true;
+  }
+
+  double ret = fan3RotationCount /2L * 1000L * 60L / ( millis() - fan3TimeStart );
+  fan3RotationCount = 0;
+  fan3TimeStart = millis();
+  return  ret;
+}
+
+#endif
 
 //
 // ----------
@@ -1804,14 +1891,49 @@ void readVoltSetFanPWM() {
 // ------------
 //
 
-
-long dealybeforeSounding;
+long delayBeforeChime;
 
 void initiateTimedChime( long delayBefore ) {
   
    // DEBUG
   DEBUG_PRINTF("CHIME");
+  
+    // set the time to wait
+  delayBeforeChime = delayBefore;
+
+  // setup a timer to press the button  
+  timer.setVariableTimer(chimeOutputCallback);
 }
+
+long chimeOutputCallback(int state) {
+  
+  if (state==0) {
+    
+    return delayBeforeChime;
+
+  } else if (state==1) {
+    
+    // then configure it for output activate pin
+    pinMode(CHIME_POUT,OUTPUT);
+    digitalWrite(CHIME_POUT,LOW);
+
+    // DEBUG
+    DEBUG_PRINTF("Chime - Activated");
+
+    return ONE_HUNDRED_MILLIS;
+    
+  } else if (state==2) {  
+    
+    // DEBUG
+    DEBUG_PRINTF("Chime - Released");
+
+    // initialise the pin for input
+    pinMode(CHIME_POUT,INPUT);
+    
+    return 0L;
+  }
+}
+
 
 // PRIVATE ------------------
 
