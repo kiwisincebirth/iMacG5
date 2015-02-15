@@ -25,7 +25,7 @@ __asm volatile ("nop");
  */
 
 //#define DEBUG // enables debig mode
-#define LEGACYBOARD // supports the legacy fan control LM317, proto board  
+//#define LEGACYBOARD // supports the legacy fan control LM317, proto board  
 #define COMMANDABLE // has all commands not just brightness
 //#define CAPACITIVE // support for cap touch sensors
 #define TEMPERATURE // temperature intput for fans
@@ -159,7 +159,7 @@ const byte NUC_POWER_LED_GND_PIN = 15;
 const byte FAN_OUTPUT_AIN = A2; 
 
 // PWM Fan Speed Voltage OUTPUT
-const byte FAN_CONTROL_POUT = 9; 
+const byte FAN_CONTROL_PWM = 9; 
 
 // Digital Pin For Temps
 const byte TEMP_PIN = 16;
@@ -167,7 +167,7 @@ const byte TEMP_PIN = 16;
 // -------------------- INVERTER 
 
 // Inverter Brigtness PWM Out
-const byte INVERTER_POUT = 10; 
+const byte INVERTER_PWM = 10; 
 
 // --------------------- CAP TOUCH
 
@@ -223,7 +223,7 @@ const byte TEMP_PIN = A2;
 // -------------------- INVERTER 
 
 // Inverter Brigtness PWM Out
-const byte INVERTER_POUT = 5; 
+const byte INVERTER_PWM = 5; 
 
 // --------------------- CAP TOUCH
 
@@ -270,8 +270,8 @@ const byte EEP_MAX_BRIGHT = 17; // Maximum PWM for Inverter - When Brightness is
 const byte EEP_BRIGHT_INC = 18; // Number of percent brightness Increased or decreased
 const byte EEP_MIN_TEMP = 19; // Fan Control to Map Temp to Voltage
 const byte EEP_MAX_TEMP = 20; // Fan Control to Map Temp to Voltage
-const byte EEP_MIN_VOLT = 21; // Fan Control to Map Temp to Voltage
-const byte EEP_MAX_VOLT = 22; // Fan Control to Map Temp to Voltage
+const byte EEP_MIN_VOLT_RPM = 21; // Fan Control to Map Temp to Voltage / RPM
+const byte EEP_MAX_VOLT_RPM = 22; // Fan Control to Map Temp to Voltage / RPM
 const byte EEP_DN_CAP_THR = 23; // Capacatance Treshold for Down Button
 const byte EEP_UP_CAP_THR = 24; // Capacatance Treshold for Up Button
 const byte EEP_CAP_SAMPLE = 25; // Number of Samples for Capacatance
@@ -301,10 +301,15 @@ const char PROGMEM string_P6[] PROGMEM = "Time-Sleep";
 const char PROGMEM string_02[] PROGMEM = "MinBright-PWM"; 
 const char PROGMEM string_03[] PROGMEM = "MaxBright-PWM"; 
 const char PROGMEM string_04[] PROGMEM = "BrightInc-%";
-const char PROGMEM string_05[] PROGMEM = "MinTemp-.01dc"; 
-const char PROGMEM string_06[] PROGMEM = "MaxTemp-.01dc";
+const char PROGMEM string_05[] PROGMEM = "MinTemp-.01c"; 
+const char PROGMEM string_06[] PROGMEM = "MaxTemp-.01c";
+#ifdef LEGACYBOARD
 const char PROGMEM string_07[] PROGMEM = "MinVolt-.01v";
 const char PROGMEM string_08[] PROGMEM = "MaxVolt-.01v";
+#else
+const char PROGMEM string_07[] PROGMEM = "MinRPM"; // redefined to be RPM Range for the Fans
+const char PROGMEM string_08[] PROGMEM = "MaxRPM";
+#endif
 const char PROGMEM string_09[] PROGMEM = "CapDnThresh"; 
 const char PROGMEM string_10[] PROGMEM = "CapUpThresh";
 const char PROGMEM string_11[] PROGMEM = "CapSamples";
@@ -401,8 +406,8 @@ void checkEepromConfiguration() {
     eepromWrite( EEP_BRIGHT_INC, 5 ); // Brightness Increme
     eepromWrite( EEP_MIN_TEMP, 0 ); // 100ths of a dreee e.g. 2000 = 20.0 degrees
     eepromWrite( EEP_MAX_TEMP, 2000 ); // 100ths of a dreee
-    eepromWrite( EEP_MIN_VOLT, 250 ); // 100ths of a volt e.g. 330 = 3.3V
-    eepromWrite( EEP_MAX_VOLT, 550 ); // 100ths of a volt
+    eepromWrite( EEP_MIN_VOLT_RPM, 250 ); // 100ths of a volt e.g. 330 = 3.3V
+    eepromWrite( EEP_MAX_VOLT_RPM, 550 ); // 100ths of a volt
     eepromWrite( EEP_DN_CAP_THR, 150 ); // Down Threashhold
     eepromWrite( EEP_UP_CAP_THR, 150 ); // Up Threashold
     eepromWrite( EEP_CAP_SAMPLE, 200 ); // Samples
@@ -1154,8 +1159,8 @@ void readTempSetTargetVolt() {
   // Computes the Factor 0 - 1 (with trig rounding) that the temp is on our MIN MAX Scale
   float tempFactor = computeTempFactor(tempAboveAmbient);
     
-  float minVolt = (float)eepromRead(EEP_MIN_VOLT) / 100.0f;
-  float maxVolt = (float)eepromRead(EEP_MAX_VOLT) / 100.0f;
+  float minVolt = (float)eepromRead(EEP_MIN_VOLT_RPM) / 100.0f;
+  float maxVolt = (float)eepromRead(EEP_MAX_VOLT_RPM) / 100.0f;
 
   // compute the Target Voltage based on the temperature 
   setFanTargetValue ( tempFactor * (maxVolt - minVolt) + minVolt );
@@ -1183,22 +1188,26 @@ float computeTempFactor( float temp ) {
 #ifdef COMMANDABLE
 
 /*
+
 void printFanDetails() {
     Serial.print(getAmbientTemp());
     Serial.print(F("\t"));
     Serial.print(getTempDiff());
+#ifdef LEGACYBOARD
     Serial.print(F("\t"));
     Serial.print(getFanTargetVolt());
     Serial.print(F("\t"));
     Serial.print(readVoltage(FAN_OUTPUT_AIN) * 2.0); // Current Voltage
+#endif
     Serial.print(F("\t"));
     Serial.print(getCurrentPWM()); // Current PWM
     Serial.print(F("\t"));
-    Serial.print(getFanRPM1());
+    Serial.print(getFanRPM(0));
     Serial.print(F("\t"));
-    Serial.print(getFanRPM2());
-    Serial.println();
-    
+    Serial.print(getFanRPM(1));
+    Serial.print(F("\t"));
+    Serial.print(getFanRPM(2));
+    Serial.println(); 
 }
 
 int tempFanMonitorTimer = -1;
@@ -1212,8 +1221,9 @@ void activateTempFanMonitor() {
     tempFanMonitorTimer = timer.setInterval(3000,printFanDetails);
   }
 
-  getFanRPM1();
-  getFanRPM2();
+  //getFanRPM(0);
+  //getFanRPM(1);
+  //getFanRPM(2);
 
   // make sure the Timer Thread is active
   timer.enable(tempFanMonitorTimer);    
@@ -1720,9 +1730,9 @@ void initInverterBright() {
   brightness = eepromRead(EEP_BRIGHT);
   
   // Inverter LCD Display Bright PIN Setup
-  digitalWrite(INVERTER_POUT,HIGH);
-  pinMode(INVERTER_POUT,OUTPUT);
-  setPWMPrescaler(INVERTER_POUT,1); // Sets 31.25KHz Frequency
+  digitalWrite(INVERTER_PWM,HIGH);
+  pinMode(INVERTER_PWM,OUTPUT);
+  setPWMPrescaler(INVERTER_PWM,1); // Sets 31.25KHz Frequency
 
   // setup timer to update EEPROM every 2 minutes, with current brightness setting.
   eepromBrightWriteTimer = timer.setInterval(TWO_MINUTE,writeBrightToEEPROM);
@@ -1747,10 +1757,10 @@ byte setInverterPWMBrightness() {
     byte inverterMax = eepromRead(EEP_MAX_BRIGHT);
     int range = inverterMax - inverterMin;
     byte pwmValue = ( range * getInverterBright() / 100 ) + inverterMin;  
-    analogWrite(INVERTER_POUT,pwmValue);
+    analogWrite(INVERTER_PWM,pwmValue);
     return pwmValue;
   } else {
-    analogWrite(INVERTER_POUT,0);
+    analogWrite(INVERTER_PWM,0);
     return 0;
   }
 }
@@ -1792,9 +1802,9 @@ void processCommandBrightness(String subCmd, String extraCmd) {
 }
 
 //
-// ------------------
-// Fan Output Voltage
-// ------------------
+// --------------------------
+// Fan Output Voltage CONTROL
+// --------------------------
 //
 
 #ifdef LEGACYBOARD
@@ -1813,9 +1823,9 @@ void setFanTargetValue(float volt) {
   targetVOLT = volt;
 }
 
-//float getFanTargetVolt() {
-//  return targetVOLT;
-//}
+float getFanTargetVolt() {
+  return targetVOLT;
+}
 
 // PRIVATE ------------------
 
@@ -1840,9 +1850,6 @@ byte getCurrentPWM() {
 
 void readVoltSetFanPWM() {
   
-  // Roughly is equal to 3.3v NOTE Cannot be computed
-  //byte currentPWM = 150; 
-
   // target PWM if fans are not active
   float currentVolt = readVoltage(FAN_OUTPUT_AIN) * 2.0;
   
@@ -1868,11 +1875,11 @@ void readVoltSetFanPWM() {
 //
 // ----------------------
 // FAN OUTPUT RPM CONTROL
-// ------------------
+// ----------------------
 // 
 
-float targetRPM = 1000; // The output voltage we want to produce
-int fanRPMControlTimer = -1; // timer that controls fan voltages
+float targetFanRPM = 600; // The output RPM we want to produce, default slow.
+int fanRPMControlTimer = -1; // timer that controls fan RPMS
 
 /**
  * Set the Target Fan Voltage
@@ -1882,7 +1889,7 @@ void setFanTargetValue(float rpm) {
   initFanRPMControl();
 
   // set the target voltage  
-  targetRPM = rpm;
+  targetFanRPM = rpm;
 }
 
 // PRIVATE ------------------
@@ -1891,6 +1898,7 @@ void initFanRPMControl() {
   
   if (fanRPMControlTimer>=0) return;
 
+  // set up the three PWM outputs
   for ( byte i=0; i<3; i++ ) {
     
     digitalWrite(FAN_CONTROL_PWM[i],HIGH); // ensures minimum voltage
@@ -1899,11 +1907,11 @@ void initFanRPMControl() {
   }
   
   // setup a timer that runs every 50 ms - To Set Fan Speed
-  fanRPMControlTimer = timer.setInterval(500,readRPMSetFanPWM);
+  fanRPMControlTimer = timer.setInterval(1000,readRPMSetFanPWM);
 }
 
 // Roughly is equal to 3.3v NOTE Cannot be computed
-//byte currentPWM = 150; 
+byte currentPWM[] = { 128, 128, 128 }; 
 
 //byte getCurrentPWM() {
 //  return currentPWM;
@@ -1911,27 +1919,49 @@ void initFanRPMControl() {
 
 void readRPMSetFanPWM() {
   
-  // Roughly is equal to 3.3v NOTE Cannot be computed
-  //byte currentPWM = 150; 
+  for ( byte fan=0; fan<3; fan++ ) {
 
-  // target PWM if fans are not active
-  //float currentVolt = readVoltage(FAN_OUTPUT_AIN) * 2.0;
+    // target RPM if fans are not active
+    int fanRPM = getFanRPM(fan);
   
-  //if ( targetVOLT < currentVolt ) {
+    // todo Need to work out a percentage difference IF
+    // <5% - then 0
+    // <10% - then just inc / dec by 1
+    // <20% - 3
+    // <50% - 5
+    // >50% - 10
+    // then add or subtract this value.
     
-    // Slow fans down slowely, rather than hard off.
-    // increasing PWM duty, lowers the voltage
-    //currentPWM = currentPWM<255 ? currentPWM+1 : 255;
+    // todo consider damping the Fan RPM Input by shortening the sample time of the fan
+    // relative to the last PWM adjustment, i.e. adjust every 2 seconds, but sample only last 1 second FAN RPM
+    // the point being that the fan takes time to adjust.
     
-  //} else if ( targetVOLT > currentVolt ) {
+    // todo need to put a scope on this and measure
+    // VOLTAGE profile of the fan
+    // PWM signal coming off the Arduino.
+    // RPM of the Fan, pullup resistor, or could get arduino tom monitor it.
+    // Voltage of the control Signal.
     
-    // Slowly ramp up the fan speed, rather than hard on.
-    // decreasing PWM duty, increases the voltage
-    //currentPWM = currentPWM>0 ? currentPWM-1 : 0;
-  //}
+    // todo sketch to control the fans as per this sketch with VIN (POT) to control RPM
+    // todo with full monitoring.
+    // Event just monitor RPM, and see what varianc we get from one second to the next. 
   
-  // write the PWM  
-  //analogWrite(FAN_CONTROL_POUT,currentPWM);
+    if ( targetFanRPM < fanRPM ) {
+    
+      // Slow fans down slowely, rather than hard off.
+      // increasing PWM duty, lowers the voltage
+      currentPWM[fan] = currentPWM[fan]<255 ? currentPWM[fan]+1 : 255;
+    
+    } else if ( targetFanRPM > fanRPM ) {
+    
+      // Slowly ramp up the fan speed, rather than hard on.
+      // decreasing PWM duty, increases the voltage
+      currentPWM[fan] = currentPWM[fan]>0 ? currentPWM[fan]-1 : 0;
+    }
+  
+    // write the PWM  
+    analogWrite(FAN_CONTROL_PWM[fan],currentPWM[fan]);
+  }
 }
 
 #endif
