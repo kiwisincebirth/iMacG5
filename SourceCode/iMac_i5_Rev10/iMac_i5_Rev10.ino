@@ -209,6 +209,11 @@ const int FAN_CONTROL_PWM_PRESCALE[] = {1};
 
 #ifdef LEGACY-RPM
 
+// Values in RPM
+#define OFF_FAN_VALUE 0
+#define MIN_FAN_VALUE 900
+#define MAX_FAN_VALUE 4000
+
 #else
 
 // Values in Millivolts
@@ -382,8 +387,13 @@ const char PROGMEM string_04[] PROGMEM = "BrightInc-%";
 const char PROGMEM string_05[] PROGMEM = "MinTemp-.01c"; 
 const char PROGMEM string_06[] PROGMEM = "MaxTemp-.01c";
 #ifdef LEGACYBOARD
+  #ifdef LEGACY-RPM
+const char PROGMEM string_07[] PROGMEM = "MinRPM"; // redefined to be RPM Range for the Fans
+const char PROGMEM string_08[] PROGMEM = "MaxRPM";
+  #else
 const char PROGMEM string_07[] PROGMEM = "MinVolt-.01v";
 const char PROGMEM string_08[] PROGMEM = "MaxVolt-.01v";
+  #endif
 #else
 const char PROGMEM string_07[] PROGMEM = "MinRPM"; // redefined to be RPM Range for the Fans
 const char PROGMEM string_08[] PROGMEM = "MaxRPM";
@@ -1952,7 +1962,8 @@ void readInputSetFanPWM() {
   
 #endif
   
-  byte factor = compareCurrentAndTarget(currentFanValue,targetFanValue[0]);
+  byte factor = 1;
+  //byte factor = compareCurrentAndTarget(currentFanValue,targetFanValue[0]);
   
   if ( currentFanValue > targetFanValue[0] ) {
     
