@@ -740,7 +740,7 @@ void startupAndTransition() {
 
 
 unsigned long millsOfLastStartup = millis();
-unsigned long millsOfLastWakFromSleep = millis();
+//unsigned long millsOfLastWakFromSleep = millis();
 
 void enterActiveMode() {
   
@@ -850,7 +850,7 @@ void leaveSleepMode() {
   incrementCounter(EEP_CYC_SLEEP);
   addToCounter(EEP_TIM_SLEEP,(millis()-timeEnteringSleep)/1000L);
   
-  millsOfLastWakFromSleep = millis();
+  //millsOfLastWakFromSleep = millis();
 }
 
 //
@@ -1761,6 +1761,14 @@ int getInverterBright() {
 
 // INVERTER ------------------
 
+// writes active time to eprom
+void flushLCDActiviation() {
+  if ( inverterActive ) {
+    addToCounter(EEP_TIM_LCD,(millis()-millsWhenLCDActivated)/1000L );
+    millsWhenLCDActivated = millis();
+  }
+}
+
 /**
  * This activates the Inverter, and sets the brightness based on brighness setting
  */
@@ -1785,12 +1793,12 @@ void deactivateInverter() {
   // initalisation
   initInverterBright();
 
-  if (inverterActive) {
+  if ( inverterActive ) {
+    flushLCDActiviation();
 
     DEBUG_PRINTF("INVERTER Deactivated");
 
     inverterActive = false;
-    addToCounter(EEP_TIM_LCD,(millis()-millsWhenLCDActivated)/1000L );
     setInverterPWMBrightness();
   }
 }
@@ -2125,13 +2133,21 @@ long chimeOutputCallback(int state) {
 boolean psuIsActive = true;
 unsigned long millsWhenPSUActivated = millis();
 
+// writes active time to eprom
+void flushPSUActiviation() {
+  if ( psuIsActive ) {
+    addToCounter(EEP_TIM_SYSTEM,(millis()-millsWhenPSUActivated)/1000L );
+    millsWhenPSUActivated = millis();
+  }
+}
+
 void activatePSU () {
 
   if ( ! psuIsActive ) {
     digitalWrite(PSU_DEACTIVATE_POUT,LOW);
     pinMode(PSU_DEACTIVATE_POUT,INPUT);
     psuIsActive = true;
-    millsWhenPSUActivated = millis();
+    millsWhenPSUActivated = millis(); // reset counter
     
     DEBUG_PRINTF("PSU Activated");
   }
@@ -2140,10 +2156,11 @@ void activatePSU () {
 void deactivatePSU () {
   
   if ( psuIsActive ) {
+    flushPSUActiviation(); // write active time to eeprom
+    
     pinMode(PSU_DEACTIVATE_POUT,OUTPUT);
     digitalWrite(PSU_DEACTIVATE_POUT,HIGH);
     psuIsActive = false;
-    addToCounter(EEP_TIM_SYSTEM,(millis()-millsWhenPSUActivated)/1000L );
     
     DEBUG_PRINTF("PSU Deactivated");
   }
@@ -2466,59 +2483,59 @@ void processCommand(String cmd) {
 
 void processCommandSystem(String subCmd, String extraCmd) {
   
-  if (subCmd.equals("R")) {
+  if (subCmd.equals("S")) {
     
-    // System Ram Available in bytes. Leonamrdo has 2.5Kbyes
-    Serial.print(F("FreeRAM "));
-    Serial.print(freeRam());    
-    Serial.println(F(" of 2560 bytes"));
+    flushPSUActiviation(); // Flushes PSU Time to EEPROM
+    flushLCDActiviation();
     
-  } else if (subCmd.equals("C")) {
+    Serial.println();
     
     Serial.print("SMC Power Cycles ");
     Serial.println(eepromRead(EEP_CYC_SMC));
+
     Serial.print("Power On  Cycles ");
     Serial.println(eepromRead(EEP_CYC_POWER));
+
     Serial.print("Sleep     Cycles ");
     Serial.println(eepromRead(EEP_CYC_SLEEP));
     
+    Serial.print(F("Powered Hours "));
+    printHours(eepromRead(EEP_TIM_SYSTEM));
+    Serial.println();
+
+    Serial.print(F("Active  Hours "));
+    printHours(eepromRead(EEP_TIM_SYSTEM)-eepromRead(EEP_TIM_SLEEP));
+    Serial.println();
+    
+    Serial.print(F("LCD     Hours "));
+    printHours(eepromRead(EEP_TIM_LCD));
+    Serial.println();
+
+    
   } else if (subCmd.equals("U")) {
     
+    Serial.println();
+    
+    // System Timers in-use
+    Serial.print(F("Threads used "));
+    Serial.print(timer.getNumTimers());    
+    Serial.println(F(" of 10"));
 
-    
-    Serial.print(F("Wake    Time "));
-    printTime((millis()-millsOfLastWakFromSleep)/1000L);
-    Serial.println();
-    
-    Serial.print(F("T Wake  Time "));
-    printTime((millis()-millsWhenPSUActivated)/1000L+eepromRead(EEP_TIM_SYSTEM)-eepromRead(EEP_TIM_SLEEP));
-    Serial.println();
-    
-    Serial.print(F("PowerOn Time "));
-    printTime((millis()-millsOfLastStartup)/1000L);
-    Serial.println();
+    // System Ram Available in bytes. Leonamrdo has 2.5Kbyes
+    Serial.print(F("RAM in use "));
+    Serial.print(2560L - freeRam());    
+    Serial.println(F(" of 2560 bytes"));
 
-    Serial.print(F("T Power Time "));
-    printTime((millis()-millsWhenPSUActivated)/1000L+eepromRead(EEP_TIM_SYSTEM));
-    Serial.println();
-
-    Serial.print(F("Tot LCD Time "));
-    printTime((millis()-millsWhenLCDActivated)/1000L+eepromRead(EEP_TIM_LCD));
-    Serial.println();
-    
-    Serial.print(F("SMC Up  Time "));
+    Serial.print(F("SMC Up Time "));
     printTime(millis()/1000L);
     Serial.println();
 
-  } else if (subCmd.equals("T")) {
-    // System Timers in-use
-    Serial.print(F("Timers In Use "));
-    Serial.println(timer.getNumTimers());    
-    Serial.print(F("Timers Unused "));
-    Serial.println(timer.getNumAvailableTimers());    
-
+    Serial.print(F("CPU Up Time "));
+    printTime((millis()-millsOfLastStartup)/1000L);
+    Serial.println();
+    
   } else {
-    Serial.println(F("System Command Unknown: R (ram), C (cycles), U (uptime), T (timers)"));
+    Serial.println(F("System Command Unknown: S (stats), U (uptime)"));
   }
 }
 
@@ -2544,6 +2561,15 @@ void printTime( unsigned long secs ) {
       if (secs<10) Serial.print(ZERO);
       Serial.print(secs);  
     }
+}
+
+void printHours( unsigned long secs ) {
+  
+    unsigned long hrs = secs / 3600;
+    unsigned long decimal = (secs - (hrs*3600)) / 360L;
+    Serial.print(hrs);
+    Serial.print(".");
+    Serial.print(decimal);
 }
 
 #endif
