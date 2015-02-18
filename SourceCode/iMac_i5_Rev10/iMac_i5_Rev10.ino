@@ -1933,17 +1933,19 @@ void readVoltSetFanPWM() {
   
 #endif
   
+  byte factor = compareCurrentAndTarget(currentFanValue,targetFanValue[0]);
+  
   if ( currentFanValue > targetFanValue[0] ) {
     
     // Slow fans down slowely, rather than hard off.
     // increasing PWM duty, lowers the voltage
-    currentPWM = currentPWM<255 ? currentPWM+1 : 255;
+    currentPWM = currentPWM<(255-factor) ? currentPWM+factor : 255;
     
   } else if ( currentFanValue < targetFanValue[0] ) {
     
     // Slowly ramp up the fan speed, rather than hard on.
     // decreasing PWM duty, increases the voltage
-    currentPWM = currentPWM>0 ? currentPWM-1 : 0;
+    currentPWM = currentPWM>factor ? currentPWM-factor : 0;
   }
   
   // write the PWM  
@@ -1957,6 +1959,9 @@ void readVoltSetFanPWM() {
 // FAN OUTPUT RPM CONTROL
 // ----------------------
 // 
+
+// Time between controlling the Fans
+#define FAN_CONTROL_PERIOD 1000
 
 // PRIVATE ------------------
 
@@ -1973,7 +1978,7 @@ void initFanController() {
   }
   
   // setup a timer that runs every 50 ms - To Set Fan Speed
-  fanControlTimer = timer.setInterval(1000,readRPMSetFanPWM);
+  fanControlTimer = timer.setInterval(FAN_CONTROL_PERIOD,readRPMSetFanPWM);
 }
 
 // Just Default Mid Range Values
@@ -1989,10 +1994,10 @@ void readRPMSetFanPWM() {
   for ( byte fan=0; fan<FAN_COUNT; fan++ ) {
 
     // target RPM if fans are not active
-    int currentFanRPM = getFanRPM(fan);
+    int currentFanValue = getFanRPM(fan);
   
     // what is a easonable amount to change PWM by
-    byte factor = compareCurrentAndTarget(currentFanRPM,targetFanValue[fan]);
+    byte factor = compareCurrentAndTarget(currentFanValue,targetFanValue[fan]);
   
     // todo consider damping the Fan RPM Input by shortening the sample time of the fan
     // relative to the last PWM adjustment, i.e. adjust every 2 seconds, but sample only last 1 second FAN RPM
@@ -2008,13 +2013,13 @@ void readRPMSetFanPWM() {
     // todo with full monitoring.
     // Event just monitor RPM, and see what varianc we get from one second to the next. 
   
-    if ( currentFanRPM < targetFanValue[fan] ) {
+    if ( currentFanValue < targetFanValue[fan] ) {
     
       // Slow fans down slowely, rather than hard off.
       // increasing PWM duty, lowers the voltage
       currentPWM[fan] = currentPWM[fan]<(255-factor) ? currentPWM[fan]+factor : 255;
     
-    } else if ( currentFanRPM > targetFanValue[fan] ) {
+    } else if ( currentFanValue > targetFanValue[fan] ) {
     
       // Slowly ramp up the fan speed, rather than hard on.
       // decreasing PWM duty, increases the voltage
