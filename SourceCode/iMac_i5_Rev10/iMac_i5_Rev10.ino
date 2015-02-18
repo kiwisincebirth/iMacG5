@@ -1,8 +1,3 @@
-// BOF preprocessor bug prevent - insert me on top of your arduino-code
-// See: http://subethasoftware.com/2013/04/09/arduino-compiler-problem-with-ifdefs-solved/
-#if 1
-__asm volatile ("nop");
-#endif
 
 /**
  * System Management Controller Kiwi's iMac G5
@@ -24,14 +19,13 @@ __asm volatile ("nop");
  * Written : July 2014
  */
 
-//#define DEBUG // enables debig mode
-#define LEGACYBOARD // supports the legacy fan control LM317, proto board  
-#define LEGACY-RPM // Legacy Controlled by RPM Inputs, not LM317
-#define COMMANDABLE // has all commands not just brightness
-//#define CAPACITIVE // support for cap touch sensors
-#define TEMPERATURE // temperature intput for fans
+//#define DEBUG
+#define COMMANDABLE
+#define CAPACITIVE
+#define TEMPERATURE
 
 #include <DebugUtils.h>
+
 #include <PWMFrequency.h>
 #include <SimpleTimer.h>
 #include <FiniteStateMachine.h>
@@ -61,47 +55,26 @@ __asm volatile ("nop");
  * DallasTemperature - https://github.com/milesburton/Arduino-Temperature-Control-Library
  */
 
-//
-// ---------------------
-// CONSTANTS
-// ---------------------
-//
-
-// time before transition is effective (input debounce)
-#define POWER_STATE_TRANSITION_TIME 50
-
-// the amount of time to wait after acivation of Main Power before pressing NUC switch
-#define NUC_POWER_SWITCH_WAIT_TIME 1000
-
-// The amount of time the NUC Power switch is depressed
-#define NUC_POWER_SWITCH_ACTIVATION_TIME 100
-
-// The amount of time the Chime switch is depressed
-#define CHIME_ACTIVATION_TIME 100
-
-// Amount of Time the Front panel LED takes to Fade Up
-#define LED_FADE_UP_TIME_WARM_BOOT 5000
-#define LED_FADE_UP_TIME_COLD_BOOT 10000
-
-// when starting up, if transition takes longer then move to shutdown
-#define STARTUP_TIMEOUT_BEFORE_SHUTDOWN 10000
-
-// Cycle time for Sleep LED Breathing
-#define LED_BREATH_CYCLE_TIME 5000
-
-// time after shutdown the ATX PSU is turned off.
-#define ATX_PSU_SHUTDOWN_TIMOUT 30000
-
-// time interval that Temperatures are sampled, and fan targets are set.
-#define TEMPERATURE_SAMPLE_PERIOD 30000
-
-// time intervale to attempt write of Brightness to EEPROM, burnout protection
-#define EEPROM_BRIGHTNESS_PERIOD 120000
-
-// Some important constants
-#define SERIAL_BAUD_RATE 9600
-
-// ---------------------
+// Some Time Constants
+#define ZERO 0
+#define ONE_MILLIS 1
+#define FIVE_MILLIS 5
+#define TEN_MILLIS 10
+#define FIFTY_MILLIS 50
+#define ONE_HUNDRED_MILLIS 100
+#define TWO_HUNDRED_MILLIS 200
+#define THREE_HUNDRED_MILLIS 300
+#define FIVE_HUNDRED_MILLIS 500
+#define SEVEN_HUNDRED_MILLIS 700
+#define ONE_SECOND 1000
+#define TWO_SECOND 2000
+#define FIVE_SECOND 5000
+#define TEN_SECOND 10000
+#define THIRTY_SECOND 30000
+#define ONE_MINUTE 60000
+#define TWO_MINUTE 120000
+#define FIVE_MINUTE 300000
+#define TEN_MINUTE 600000
 
 // Some ASCII Constancts
 #define CR 13
@@ -111,7 +84,7 @@ __asm volatile ("nop");
 #define COMMA ','
 #define COLON ':'
 #define EQUALS '='
-#define ZERO '0'
+#define ZERO_CHAR '0'
 
 //
 // ================
@@ -121,7 +94,6 @@ __asm volatile ("nop");
 // 1.1 - 31/01/2015 - Added support for RPM Fan Input, future feature
 // 1.1 - 31/01/2015 - Simplified EEPROM Code, Long support Only.
 // 1.1 - 31/01/2015 - Added addition ifdefs to reduce size of bnary.
-// 1.2 - 15/02/2015 - Started to add support for RPM Fan Control
 //
 // --------------
 // Future Futures
@@ -130,6 +102,9 @@ __asm volatile ("nop");
 // If brightness change by Capacatance report report back to the app, so slider can moved
 // System State command SS - FSM State, Power, Inverter, etc
 //
+
+// Some important constants
+#define SERIAL_BAUD_RATE 9600
 
 //
 // ===================
@@ -151,252 +126,60 @@ __asm volatile ("nop");
 // Analog Pins can be used a digital ( refer to them as A0, A1, ...)
 //
 
-#ifdef LEGACYBOARD
+// -------------------- POWER MANAGEMENT
 
-//
-// LEGACY PINS
-//
+// D0 RXi Unused
 
-// -------------- POWER DETECTION CONTROL
-
-// Power Switch Control Pins
-#define POWER_SWITCH_PIN_POUT 3 
- 
-// Main PSU Control to de-active ATX PSU
-#define PSU_DEACTIVATE_POUT 5
-
-// Power Notification
-#define SLEEP_LED_POUT 6
-
-// Pwer State Sense Pins
-#define NUC_POWER_LED_VCC_PIN 14
-#define NUC_POWER_LED_GND_PIN 15
-
-// ---------------------- FAN VOLTAGE INPUT
-
-// Fan Voltage Input Analog Detection
-#define FAN_OUTPUT_AIN A2
-
-// NUMBER OF FAN NPUTS
-#define FAN_COUNT 2
-
-// The Pins For Fan Input
-const byte FAN_RPM_PIN[] = { 0, 1 }; 
-
-// Interrupts that fans are attached to.
-#define FAN1_INTERRUPT 2 
-#define FAN2_INTERRUPT 3 
-
-// --------------------- FAN CONTROL
-
-// Time between controlling the Fans
-#define FAN_CONTROL_PERIOD 50
-
-// Number of Output Fan Control PWM's
-#define FAN_CONTROL_COUNT 1
-
-// PWM Fan Speed Voltage OUTPUT
-const byte FAN_CONTROL_PWM[] = { 9 } ;
-
-// Prescale Values for controlling PWM
-const int FAN_CONTROL_PWM_PRESCALE[] = {1};
-
-// Values in Millivolts
-#define OFF_FAN_VALUE 0
-#define MIN_FAN_VALUE 330
-#define MAX_FAN_VALUE 1200
-
-// -------------------- TEMPS 
-
-// Digital Pin For Temps
-#define TEMP_PIN 16
-
-// -------------------- INVERTER 
-
-// Inverter Brigtness PWM Out
-#define INVERTER_PWM 10 
-
-// --------------------- CAP TOUCH
-
-// Up and down capacitive touch broghtness pins
-#define TOUCH_COMMON_PIN_CAP 2
-#define TOUCH_DOWN_PIN_CAP 7
-#define TOUCH_UP_PIN_CAP 8
-
-// -------------------- CHIME
-
-// Chime Output --->>>  HIGH <<<---  Level OUTPUT
-#define CHIME_POUT 1
-
-#else
-
-//
-// MODERN PINS
-//
-
-// -------------- POWER DETECTION CONTROL
-
-// Power Switch Control Pins
-#define POWER_SWITCH_PIN_POUT A1
- 
-// Main PSU Control to de-active ATX PSU
-#define PSU_DEACTIVATE_POUT 4
-
-// Power Notification
-#define SLEEP_LED_POUT 3
-
-// Pwer State Sense Pins
-#define NUC_POWER_LED_VCC_PIN 14
-#define NUC_POWER_LED_GND_PIN 15
+// Chime Output Connected to PLAYE, high going Level.
+//const byte CHIME_POUT = 0; // TXO
 
 // ---------------------- FAN SPEED PINS
 
-// NUMBER OF FAN NPUTS
-#define FAN_COUNT 3
-
 // The Pins For Fan Input
-const byte FAN_RPM_PIN[] = { 1, 2, 7 }; 
+const byte FAN1_PWM_PIN = 0; 
+const byte FAN2_PWM_PIN = 1; 
 
 // Interrupts that fans are attached to.
-#define FAN1_INTERRUPT 3 
-#define FAN2_INTERRUPT 1 
-#define FAN3_INTERRUPT 4 
+const byte FAN1_INTERRUPT = 2; 
+const byte FAN2_INTERRUPT = 3; 
+
+// -------------- POWER DETECTION CONTROL
+
+// Power Switch Control Pins
+const byte POWER_SWITCH_PIN_POUT = 3; 
+ 
+// Main PSU Control to de-active ATX PSU
+const byte PSU_DEACTIVATE_POUT = 5;
+
+// Power Notification
+const byte SLEEP_LED_POUT = 6;
+
+// Pwer State Sense Pins
+const byte NUC_POWER_LED_VCC_PIN = 14;
+const byte NUC_POWER_LED_GND_PIN = 15;
 
 // --------------------- FAN CONTROL
 
-// Time between controlling the Fans
-#define FAN_CONTROL_PERIOD 1000
+// Fan Voltage Input Analog Detection
+const byte FAN_OUTPUT_AIN = A2; 
 
-// Number of Output Fan Control PWM's
-#define FAN_CONTROL_COUNT 3
-
-// Fan Control Outputs
-const byte FAN_CONTROL_PWM[] = { 9, 6, 10 } ;
-
-// Prescale Values for controlling PWM
-const int FAN_CONTROL_PWM_PRESCALE[] = { 256, 256, 256 };
-
-// Values in RPM
-#define OFF_FAN_VALUE 0
-#define MIN_FAN_VALUE 900
-#define MAX_FAN_VALUE 4000
-
-// -------------------- TEMPS 
+// PWM Fan Speed Voltage OUTPUT
+const byte FAN_CONTROL_POUT = 9; 
 
 // Digital Pin For Temps
-#define TEMP_PIN A2
+const byte TEMP_PIN = 16;
 
 // -------------------- INVERTER 
 
 // Inverter Brigtness PWM Out
-#define INVERTER_PWM 5 
+const byte INVERTER_POUT = 10; 
 
 // --------------------- CAP TOUCH
 
 // Up and down capacitive touch broghtness pins
-#define TOUCH_COMMON_PIN_CAP A0
-#define TOUCH_DOWN_PIN_CAP 16
-#define TOUCH_UP_PIN_CAP 8
-
-// -------------------- CHIME
-
-// Chime Output LOW Level OUTPUT
-#define CHIME_POUT A3
-
-#endif
-
-//
-// ================================================
-// EEPROM Locations that configuratyion data is stored
-// ==================================================
-//
-
-// Location the Current Version ID is stored
-#define EEP_VERSION 0
-
-#define EEP_BRIGHT 1 // brghtness Setting 0 - 100 %
-#define EEP_CYC_SMC 2 // SMC Power / Rest Cycles (StartUp)
-#define EEP_CYC_POWER 3 // CPU Power Cycles (Power Up)
-#define EEP_CYC_SLEEP 4 // CPU Sleep Cycles (Wake)
-#define EEP_TIM_SYSTEM 5 // System Uptime
-#define EEP_TIM_LCD 6 //LCD Power On Time
-#define EEP_TIM_SLEEP 7 //LCD Power On Time
-
-#define EEP_RESERVED3 8 
-#define EEP_RESERVED4 9 
-#define EEP_RESERVED5 10 
-#define EEP_RESERVED6 11 
-#define EEP_RESERVED7 12 
-#define EEP_RESERVED8 13 
-#define EEP_RESERVED9 14 
-#define EEP_RESERVEDA 15 
-
-#define EEP_MIN_BRIGHT 16 // Minimum PWM for Inverter - When Brihhtness is 0%
-#define EEP_MAX_BRIGHT 17 // Maximum PWM for Inverter - When Brightness is 100%
-#define EEP_BRIGHT_INC 18 // Number of percent brightness Increased or decreased
-#define EEP_MIN_TEMP 19 // Fan Control to Map Temp to Voltage
-#define EEP_MAX_TEMP 20 // Fan Control to Map Temp to Voltage
-#define EEP_MIN_VOLT_RPM 21 // Fan Control to Map Temp to Voltage / RPM
-#define EEP_MAX_VOLT_RPM 22 // Fan Control to Map Temp to Voltage / RPM
-#define EEP_DN_CAP_THR 23 // Capacatance Treshold for Down Button
-#define EEP_UP_CAP_THR 24 // Capacatance Treshold for Up Button
-#define EEP_CAP_SAMPLE 25 // Number of Samples for Capacatance
-#define EEP_DEPRECATED1 26 // The Old Model ID of the project this board implements
-#define EEP_MIN_LED_PWM 27 // Minimum PWM Value for Front Panel LED Effects
-#define EEP_MAX_LED_PWM 28 // Maximum PWM Value for Front Panel LED Effects
-#define EEP_INVERTER_STARTUP_DELAY 29 // milliseconds before starting inverter 
-#define EEP_CAP_CONTROL 30 // is the capacatace controller enabled 
-#define EEP_FAN_CONTROL 31 // is the fan temp controller enabled  
-#define EEP_INVERTER_WARM_DELAY 32 // milliseconds before starting inverter 
-
-//
-// Names of Data stored in these locations
-//
-
-const char PROGMEM string_RES[] PROGMEM = "Reserved";
-const char PROGMEM string_DEP[] PROGMEM = "Deprecated";
-const char PROGMEM string_VS[] PROGMEM = "Version-Size";
-const char PROGMEM string_P0[] PROGMEM = "Bright-%";
-const char PROGMEM string_P1[] PROGMEM = "Cycles-SMC";
-const char PROGMEM string_P2[] PROGMEM = "Cycles-Power";
-const char PROGMEM string_P3[] PROGMEM = "Cycles-Sleep";
-const char PROGMEM string_P4[] PROGMEM = "Time-Power";
-const char PROGMEM string_P5[] PROGMEM = "Time-LCD";
-const char PROGMEM string_P6[] PROGMEM = "Time-Sleep";
-
-const char PROGMEM string_02[] PROGMEM = "MinBright-PWM"; 
-const char PROGMEM string_03[] PROGMEM = "MaxBright-PWM"; 
-const char PROGMEM string_04[] PROGMEM = "BrightInc-%";
-const char PROGMEM string_05[] PROGMEM = "MinTemp-.01c"; 
-const char PROGMEM string_06[] PROGMEM = "MaxTemp-.01c";
-#ifdef LEGACYBOARD
-const char PROGMEM string_07[] PROGMEM = "MinVolt-.01v";
-const char PROGMEM string_08[] PROGMEM = "MaxVolt-.01v";
-#else
-const char PROGMEM string_07[] PROGMEM = "MinRPM"; // redefined to be RPM Range for the Fans
-const char PROGMEM string_08[] PROGMEM = "MaxRPM";
-#endif
-const char PROGMEM string_09[] PROGMEM = "CapDnThresh"; 
-const char PROGMEM string_10[] PROGMEM = "CapUpThresh";
-const char PROGMEM string_11[] PROGMEM = "CapSamples";
-const char PROGMEM string_13[] PROGMEM = "MinLED-PWM";
-const char PROGMEM string_14[] PROGMEM = "MaxLED-PWM";  
-const char PROGMEM string_15[] PROGMEM = "InvertStartDly";  
-const char PROGMEM string_16[] PROGMEM = "CapBrigEnabled"; 
-const char PROGMEM string_17[] PROGMEM = "FanTempEnabled"; 
-const char PROGMEM string_18[] PROGMEM = "InvertWarmDly"; 
-
-//
-// the following must contain all strings from above
-//
-
-PGM_P const eepName[] PROGMEM = {
-//const char PROGMEM *eepName[] = {  // older 1.0.x
-  string_VS, string_P0, string_P1, string_P2, string_P3, string_P4, string_P5, string_P6, 
-  string_RES, string_RES, string_RES, string_RES, string_RES, string_RES, string_RES, string_RES, 
-  string_02, string_03, string_04, string_05, string_06, string_07, 
-  string_08, string_09, string_10, string_11, string_DEP, string_13, 
-  string_14, string_15, string_16, string_17, string_18 };
+const byte TOUCH_COMMON_PIN_CAP = 2;
+const byte TOUCH_DOWN_PIN_CAP = 7;
+const byte TOUCH_UP_PIN_CAP = 8;
 
 // 
 // ========================================
@@ -434,6 +217,91 @@ void loop () {
 // ============================================
 //
 
+// Location the Current Version ID is stored
+const byte EEP_VERSION = 0;
+
+//
+// EEPROM Locations that configuratyion data is stored
+//
+
+const byte EEP_BRIGHT = 1; // brghtness Setting 0 - 100 %
+const byte EEP_CYC_SMC = 2; // SMC Power / Rest Cycles (StartUp)
+const byte EEP_CYC_POWER = 3; // CPU Power Cycles (Power Up)
+const byte EEP_CYC_SLEEP = 4; // CPU Sleep Cycles (Wake)
+const byte EEP_TIM_SYSTEM = 5; // System Uptime
+const byte EEP_TIM_LCD = 6; //LCD Power On Time
+const byte EEP_TIM_SLEEP = 7; //LCD Power On Time
+
+const byte EEP_RESERVED3 = 8; 
+const byte EEP_RESERVED4 = 9; 
+const byte EEP_RESERVED5 = 10; 
+const byte EEP_RESERVED6 = 11; 
+const byte EEP_RESERVED7 = 12; 
+const byte EEP_RESERVED8 = 13; 
+const byte EEP_RESERVED9 = 14; 
+const byte EEP_RESERVEDA = 15; 
+
+const byte EEP_MIN_BRIGHT = 16; // Minimum PWM for Inverter - When Brihhtness is 0%
+const byte EEP_MAX_BRIGHT = 17; // Maximum PWM for Inverter - When Brightness is 100%
+const byte EEP_BRIGHT_INC = 18; // Number of percent brightness Increased or decreased
+const byte EEP_MIN_TEMP = 19; // Fan Control to Map Temp to Voltage
+const byte EEP_MAX_TEMP = 20; // Fan Control to Map Temp to Voltage
+const byte EEP_MIN_VOLT = 21; // Fan Control to Map Temp to Voltage
+const byte EEP_MAX_VOLT = 22; // Fan Control to Map Temp to Voltage
+const byte EEP_DN_CAP_THR = 23; // Capacatance Treshold for Down Button
+const byte EEP_UP_CAP_THR = 24; // Capacatance Treshold for Up Button
+const byte EEP_CAP_SAMPLE = 25; // Number of Samples for Capacatance
+const byte EEP_DEPRECATED1 = 26; // The Old Model ID of the project this board implements
+const byte EEP_MIN_LED_PWM = 27; // Minimum PWM Value for Front Panel LED Effects
+const byte EEP_MAX_LED_PWM = 28; // Maximum PWM Value for Front Panel LED Effects
+const byte EEP_INVERTER_STARTUP_DELAY = 29; // milliseconds before starting inverter 
+const byte EEP_CAP_CONTROL = 30; // is the capacatace controller enabled 
+const byte EEP_FAN_CONTROL = 31; // is the fan temp controller enabled  
+const byte EEP_INVERTER_WARM_DELAY = 32; // milliseconds before starting inverter 
+
+//
+// Names of Data stored in these locations
+//
+
+prog_char string_RES[] PROGMEM = "Reserved";
+prog_char string_DEP[] PROGMEM = "Deprecated";
+prog_char string_VS[] PROGMEM = "Version-Size";
+prog_char string_P0[] PROGMEM = "Bright-%";
+prog_char string_P1[] PROGMEM = "Cycles-SMC";
+prog_char string_P2[] PROGMEM = "Cycles-Power";
+prog_char string_P3[] PROGMEM = "Cycles-Sleep";
+prog_char string_P4[] PROGMEM = "Time-Power";
+prog_char string_P5[] PROGMEM = "Time-LCD";
+prog_char string_P6[] PROGMEM = "Time-Sleep";
+
+prog_char string_02[] PROGMEM = "MinBright-PWM"; 
+prog_char string_03[] PROGMEM = "MaxBright-PWM"; 
+prog_char string_04[] PROGMEM = "BrightInc-%";
+prog_char string_05[] PROGMEM = "MinTemp-.01dc"; 
+prog_char string_06[] PROGMEM = "MaxTemp-.01dc";
+prog_char string_07[] PROGMEM = "MinVolt-.01v";
+prog_char string_08[] PROGMEM = "MaxVolt-.01v";
+prog_char string_09[] PROGMEM = "CapDnThresh"; 
+prog_char string_10[] PROGMEM = "CapUpThresh";
+prog_char string_11[] PROGMEM = "CapSamples";
+prog_char string_13[] PROGMEM = "MinLED-PWM";
+prog_char string_14[] PROGMEM = "MaxLED-PWM";  
+prog_char string_15[] PROGMEM = "InvertStartDly";  
+prog_char string_16[] PROGMEM = "CapBrigEnabled"; 
+prog_char string_17[] PROGMEM = "FanTempEnabled"; 
+prog_char string_18[] PROGMEM = "InvertWarmDly"; 
+
+//
+// the following must contain all strings from above
+//
+
+PROGMEM const char *eepName[] = { 
+  string_VS, string_P0, string_P1, string_P2, string_P3, string_P4, string_P5, string_P6, 
+  string_RES, string_RES, string_RES, string_RES, string_RES, string_RES, string_RES, string_RES, 
+  string_02, string_03, string_04, string_05, string_06, string_07, 
+  string_08, string_09, string_10, string_11, string_DEP, string_13, 
+  string_14, string_15, string_16, string_17, string_18 };
+
 /**
  * Setup the device if not initialised, flasing the eeprom with defaults, if they dont exist
  */
@@ -453,31 +321,31 @@ void checkEepromConfiguration() {
     
     // write default values
     eepromWrite( EEP_BRIGHT, 100 ); // 100% brightness
-    eepromWrite( EEP_CYC_SMC, 0);   // 
-    eepromWrite( EEP_CYC_POWER, 0); // 
-    eepromWrite( EEP_CYC_SLEEP, 0); // 
-    eepromWrite( EEP_TIM_SYSTEM, 0); // 
-    eepromWrite( EEP_TIM_LCD, 0); // 
-    eepromWrite( EEP_TIM_SLEEP, 0); // 
-    eepromWrite( EEP_RESERVED3, 0); // 
-    eepromWrite( EEP_RESERVED4, 0); // 
-    eepromWrite( EEP_RESERVED5, 0); // 
-    eepromWrite( EEP_RESERVED6, 0); // 
-    eepromWrite( EEP_RESERVED7, 0); // 
-    eepromWrite( EEP_RESERVED8, 0); // 
-    eepromWrite( EEP_RESERVED9, 0); // 
-    eepromWrite( EEP_RESERVEDA, 0); // 
+    eepromWrite( EEP_CYC_SMC, ZERO);   // 
+    eepromWrite( EEP_CYC_POWER, ZERO); // 
+    eepromWrite( EEP_CYC_SLEEP, ZERO); // 
+    eepromWrite( EEP_TIM_SYSTEM, ZERO); // 
+    eepromWrite( EEP_TIM_LCD, ZERO); // 
+    eepromWrite( EEP_TIM_SLEEP, ZERO); // 
+    eepromWrite( EEP_RESERVED3, ZERO); // 
+    eepromWrite( EEP_RESERVED4, ZERO); // 
+    eepromWrite( EEP_RESERVED5, ZERO); // 
+    eepromWrite( EEP_RESERVED6, ZERO); // 
+    eepromWrite( EEP_RESERVED7, ZERO); // 
+    eepromWrite( EEP_RESERVED8, ZERO); // 
+    eepromWrite( EEP_RESERVED9, ZERO); // 
+    eepromWrite( EEP_RESERVEDA, ZERO); // 
     eepromWrite( EEP_MIN_BRIGHT, 60 ); // PWM
     eepromWrite( EEP_MAX_BRIGHT, 255 ); // PWM
     eepromWrite( EEP_BRIGHT_INC, 5 ); // Brightness Increme
     eepromWrite( EEP_MIN_TEMP, 0 ); // 100ths of a dreee e.g. 2000 = 20.0 degrees
     eepromWrite( EEP_MAX_TEMP, 2000 ); // 100ths of a dreee
-    eepromWrite( EEP_MIN_VOLT_RPM, 250 ); // 100ths of a volt e.g. 330 = 3.3V
-    eepromWrite( EEP_MAX_VOLT_RPM, 550 ); // 100ths of a volt
+    eepromWrite( EEP_MIN_VOLT, 250 ); // 100ths of a volt e.g. 330 = 3.3V
+    eepromWrite( EEP_MAX_VOLT, 550 ); // 100ths of a volt
     eepromWrite( EEP_DN_CAP_THR, 150 ); // Down Threashhold
     eepromWrite( EEP_UP_CAP_THR, 150 ); // Up Threashold
     eepromWrite( EEP_CAP_SAMPLE, 200 ); // Samples
-    eepromWrite( EEP_DEPRECATED1, 0 ); // Was Old Default Model ID
+    eepromWrite( EEP_DEPRECATED1, ZERO ); // Was Old Default Model ID
     eepromWrite( EEP_MIN_LED_PWM, 5 ); // Minimum Effects PWM for Front Panel LED
     eepromWrite( EEP_MAX_LED_PWM, 255 ); // Maximum Effects PWM for Front Panel LED
     eepromWrite( EEP_INVERTER_STARTUP_DELAY, 6000 ); // COLD Inverter Startup delay miliseconds
@@ -715,10 +583,8 @@ void startupAndTransition() {
 // ACTIVE STATE
 //
 
-
-
 unsigned long millsOfLastStartup = millis();
-unsigned long millsOfLastWakFromSleep = millis();
+//unsigned long millsOfLastWakFromSleep = millis();
 
 void enterActiveMode() {
   
@@ -732,11 +598,10 @@ void enterActiveMode() {
   // If Active State is coming from A BOOTUP state (either COLD or WARM)
   if ( fsm.wasInState(STATE_POWERUP) || fsm.wasInState(STATE_POWERDOWN) ) {
     
-    // signal the chime 
-    // TODO The Chime delaty could be in EEPROM
-    initiateTimedChime(100);
+    // signal the chime in 100 millis
+    initiateTimedChime(ONE_HUNDRED_MILLIS);
     
-    // count the power cycle, and reset the startup time
+    // count the power cycle
     incrementCounter(EEP_CYC_POWER);
     millsOfLastStartup = millis();
     
@@ -828,7 +693,7 @@ void leaveSleepMode() {
   incrementCounter(EEP_CYC_SLEEP);
   addToCounter(EEP_TIM_SLEEP,(millis()-timeEnteringSleep)/1000L);
   
-  millsOfLastWakFromSleep = millis();
+  //millsOfLastWakFromSleep = millis();
 }
 
 //
@@ -842,7 +707,7 @@ void enterPowerDownMode() {
   DEBUG_PRINTF("ENTER-PWR-DN");
  
   // Enable 30 second power down led effect
-  activateFrontPanelLEDRampDn(ATX_PSU_SHUTDOWN_TIMOUT);
+  activateFrontPanelLEDRampDn(THIRTY_SECOND);
   
   // and turn off LCD, and FANS
   deactivateInverter();
@@ -856,7 +721,7 @@ void enterPowerDownMode() {
 
 void updatePowerDownMode() {
   
-  if ( fsm.timeInCurrentState() >= ATX_PSU_SHUTDOWN_TIMOUT) {
+  if ( fsm.timeInCurrentState() >= THIRTY_SECOND) {
     
     // DEBUG
     DEBUG_PRINTF("Powered Down for 30 Seconds -> Inactive");
@@ -871,7 +736,7 @@ void updatePowerDownMode() {
     fsm.transitionTo(STATE_ACTIVE);
 
     // With a quick LED Ramp up.
-    activateFrontPanelLEDRampUp( LED_FADE_UP_TIME_WARM_BOOT );
+    activateFrontPanelLEDRampUp( FIVE_SECOND );
   }
 }
 
@@ -934,10 +799,10 @@ void enterPowerUpMode() {
   activatePSU();
   
   // wait a short time and press the PWR button, ie wait for pwr to come up
-  initiatePowerButtonPress( NUC_POWER_SWITCH_WAIT_TIME );
+  initiatePowerButtonPress( ONE_SECOND );
 
   // Ramp the LED slowely up over ten seconds
-  activateFrontPanelLEDRampUp( LED_FADE_UP_TIME_COLD_BOOT );
+  activateFrontPanelLEDRampUp( TEN_SECOND );
 
   // Initialise the Mini FSM for powerup (see below).
   powerupeventsequence = 1;
@@ -946,7 +811,7 @@ void enterPowerUpMode() {
 void updatePowerUpMode() {
   
   // if 10 seconds have been reached 
-  if ( fsm.timeInCurrentState() >= STARTUP_TIMEOUT_BEFORE_SHUTDOWN ) {
+  if ( fsm.timeInCurrentState() >= TEN_SECOND) {
     
     // DEBUG
     DEBUG_PRINTF("Powered Up for 10 Seconds -> Inactive");
@@ -1146,7 +1011,7 @@ void activateTempFanControl() {
   if ( eepromRead(EEP_FAN_CONTROL) == 0 || getTempDiff() < 0.0f ) {
    
     // a default voltage
-    setFanContolTarget( MIN_FAN_VALUE );
+    setFanTargetVolt( 3.3f );
     
     return;
   }
@@ -1158,8 +1023,8 @@ void activateTempFanControl() {
     
   } else {
    
-    // setup a timer - To Read Temperature
-    tempFanControlTimer = timer.setInterval(TEMPERATURE_SAMPLE_PERIOD,readTempSetTargetVolt);
+    // setup a timer that runs every 500 ms - To Read Temperature
+    tempFanControlTimer = timer.setInterval(THIRTY_SECOND,readTempSetTargetVolt);
   }
   
   // set initial voltage
@@ -1175,7 +1040,7 @@ void deactivateTempFanControl() {
   if (tempFanControlTimer >=0 ) timer.disable(tempFanControlTimer);  
 
   // and shut the fans down.
-  setFanContolTarget( OFF_FAN_VALUE ); // sets target volt to be low SHUTS FANS OFF
+  setFanTargetVolt( 0.0f ); // sets target volt to be low SHUTS FANS OFF
 }
 
 // PRIVATE ------------------
@@ -1200,7 +1065,7 @@ void processCommandFan(String subCmd, String extraCmd) {
   } else if (subCmd.equals("M")) {
     deactivateTempFanControl();
     Serial.print(F("Fans Set To Max"));
-    setFanContolTarget( MAX_FAN_VALUE );
+    setFanTargetVolt( 12.0f ); // MAXIMUM FANS
 
   } else if (subCmd.equals("L")) {
     activateTempFanMonitor();
@@ -1223,11 +1088,11 @@ void readTempSetTargetVolt() {
   // Computes the Factor 0 - 1 (with trig rounding) that the temp is on our MIN MAX Scale
   float tempFactor = computeTempFactor(tempAboveAmbient);
     
-  float minValue = (float)eepromRead(EEP_MIN_VOLT_RPM);
-  float maxValue = (float)eepromRead(EEP_MAX_VOLT_RPM);
+  float minVolt = (float)eepromRead(EEP_MIN_VOLT) / 100.0f;
+  float maxVolt = (float)eepromRead(EEP_MAX_VOLT) / 100.0f;
 
   // compute the Target Voltage based on the temperature 
-  setFanContolTarget ( tempFactor * (maxValue - minValue) + minValue );
+  setFanTargetVolt ( tempFactor * (maxVolt - minVolt) + minVolt );
 }
 
 /**
@@ -1256,19 +1121,24 @@ void printFanDetails() {
     Serial.print(F("\t"));
     Serial.print(getTempDiff());
     Serial.print(F("\t"));
-    Serial.print(getFanControlTarget(0));
+    Serial.print(getFanTargetVolt());
     Serial.print(F("\t"));
-    Serial.print(getFanRPM(0));
+    Serial.print(readVoltage(FAN_OUTPUT_AIN) * 2.0); // Current Voltage
     Serial.print(F("\t"));
-    Serial.print(getFanRPM(1));
+    Serial.print(getCurrentPWM()); // Current PWM
     Serial.print(F("\t"));
-    Serial.print(getCurrentPWM(0)); // Current PWM
-    Serial.println(); 
+    Serial.print(getFanRPM1());
+    Serial.print(F("\t"));
+    Serial.print(getFanRPM2());
+    Serial.println();
+    
 }
 
 int tempFanMonitorTimer = -1;
 
-// Activate the controller, and set the fan speed based on Temperature
+/**
+ * Activate the controller, and set the fan speed based on Temperature
+ */
 void activateTempFanMonitor() {
   
   if ( tempFanMonitorTimer == -1 ) { 
@@ -1277,15 +1147,16 @@ void activateTempFanMonitor() {
     tempFanMonitorTimer = timer.setInterval(3000,printFanDetails);
   }
 
-  //getFanRPM(0);
-  //getFanRPM(1);
-  //getFanRPM(2);
+  getFanRPM1();
+  getFanRPM2();
 
   // make sure the Timer Thread is active
   timer.enable(tempFanMonitorTimer);    
 }
 
-// Deactive the controller, and turn the fans off
+/**
+ * Deactive the controller, and turn the fans off
+ */
 void deactivateTempFanMonitor() {
 
   // disable the timer if it exists
@@ -1362,49 +1233,49 @@ void calibrateSensorReading() { }
 // ----------
 //
 
-volatile long fanRotationCount[FAN_COUNT];
-unsigned long fanTimeStart[FAN_COUNT];
+volatile long fan1RotationCount;
+volatile unsigned long fan1TimeStart;
+volatile long fan2RotationCount;
+volatile unsigned long fan2TimeStart;
 
 void interruptFan1() {
-  fanRotationCount[0]++;
+  fan1RotationCount ++;
 }
 
 void interruptFan2() {
-  fanRotationCount[1] ++;
+  fan2RotationCount ++;
 }
 
-void interruptFan3() {
-  fanRotationCount[2] ++;
-}
-
-int getFanRPM( byte fan ) {
+int getFanRPM1() {
   
   static boolean started = false;
   if (!started) {
-    started = true;
-    
-    for ( byte fan=0; fan<FAN_COUNT; fan++ ) {
-      // Start Up the RPM by setting PIN 
-      pinMode(FAN_RPM_PIN[fan],INPUT_PULLUP);    
-    }
-    
-    //and attaching interrupt
-#ifdef FAN1_INTERRUPT
+    // Start Up the RPM by setting PN and attaching interrupt
+    pinMode(FAN1_PWM_PIN,INPUT_PULLUP);    
     attachInterrupt(FAN1_INTERRUPT,interruptFan1,FALLING);
-#endif
-#ifdef FAN2_INTERRUPT
-    attachInterrupt(FAN2_INTERRUPT,interruptFan2,FALLING);
-#endif
-#ifdef FAN3_INTERRUPT
-    attachInterrupt(FAN3_INTERRUPT,interruptFan3,FALLING);
-#endif
+    started = true;
   }
 
-  // pulses counted; /2 pulses per rotation; *60000 milliseconds per minute; /millis elapsed
-  double ret = fanRotationCount[fan] /2L *60000L / ( millis() - fanTimeStart[fan] );
-  fanRotationCount[fan] = 0;
-  fanTimeStart[fan] = millis();
-  return ret;
+  double ret = fan1RotationCount /2L *1000L * 60L / ( millis() - fan1TimeStart );
+  fan1RotationCount = 0;
+  fan1TimeStart = millis();
+  return  ret;
+}
+
+int getFanRPM2() {
+
+  static boolean started = false;
+  if (!started) {
+    // Start Up the RPM by setting PN and attaching interrupt
+    pinMode(FAN2_PWM_PIN,INPUT_PULLUP);    
+    attachInterrupt(FAN2_INTERRUPT,interruptFan2,FALLING);
+    started = true;
+  }
+
+  double ret = fan2RotationCount /2L * 1000L * 60L / ( millis() - fan2TimeStart );
+  fan2RotationCount = 0;
+  fan2TimeStart = millis();
+  return  ret;
 }
 
 //
@@ -1470,30 +1341,25 @@ float getAmbientTemp() { return 20; }
 // -----------------------------
 //
 
-// Power State Constants.
-#define POWER_STATE_S0 0
-#define POWER_STATE_S3 3
-#define POWER_STATE_S5 5
-
 /**
  * Fully Active Mode - LED ON
  */
 boolean powerS0() {
-  return (powerState()==POWER_STATE_S0); 
+  return (powerState()==0); 
 }
 
 /**
  * Sleep Mode - LED IS SECOND COLOUR
  */
 boolean powerS3() {
-  return (powerState()==POWER_STATE_S3); 
+  return (powerState()==3); 
 }
 
 /**
  * Sleep Mode - LED IS OFF
  */
 boolean powerS5() {
-  return (powerState()==POWER_STATE_S5); 
+  return (powerState()==5); 
 }
 
 /**
@@ -1537,7 +1403,7 @@ byte powerState() {
 
   // if the last observered value different to last reported
   // and sufficient time has exceeded (say 10ms) 
-  if ( lastObservered != reportedState && firstObservervedWhen-millis() > POWER_STATE_TRANSITION_TIME ) {
+  if ( lastObservered != reportedState && firstObservervedWhen-millis() > FIFTY_MILLIS ) {
     
     // then we can set the last observered value is probably final so
     reportedState = lastObservered;
@@ -1640,7 +1506,7 @@ long powerButtonCallback(int state) {
     // DEBUG
     DEBUG_PRINTF("Front Panel Power Button - Depressed");
 
-    return NUC_POWER_SWITCH_ACTIVATION_TIME;
+    return ONE_HUNDRED_MILLIS;
     
   } else if (state==2) {  
     
@@ -1739,6 +1605,14 @@ int getInverterBright() {
 
 // INVERTER ------------------
 
+// writes active time to eprom
+void flushLCDActiviation() {
+  if ( inverterActive ) {
+    addToCounter(EEP_TIM_LCD,(millis()-millsWhenLCDActivated)/1000L );
+    millsWhenLCDActivated = millis();
+  }
+}
+
 /**
  * This activates the Inverter, and sets the brightness based on brighness setting
  */
@@ -1763,12 +1637,12 @@ void deactivateInverter() {
   // initalisation
   initInverterBright();
 
-  if (inverterActive) {
+  if ( inverterActive ) {
+    flushLCDActiviation();
 
     DEBUG_PRINTF("INVERTER Deactivated");
 
     inverterActive = false;
-    addToCounter(EEP_TIM_LCD,(millis()-millsWhenLCDActivated)/1000L );
     setInverterPWMBrightness();
   }
 }
@@ -1783,12 +1657,12 @@ void initInverterBright() {
   brightness = eepromRead(EEP_BRIGHT);
   
   // Inverter LCD Display Bright PIN Setup
-  digitalWrite(INVERTER_PWM,HIGH);
-  pinMode(INVERTER_PWM,OUTPUT);
-  setPWMPrescaler(INVERTER_PWM,1); // Sets 31.25KHz Frequency
+  digitalWrite(INVERTER_POUT,HIGH);
+  pinMode(INVERTER_POUT,OUTPUT);
+  setPWMPrescaler(INVERTER_POUT,1); // Sets 31.25KHz Frequency
 
   // setup timer to update EEPROM every 2 minutes, with current brightness setting.
-  eepromBrightWriteTimer = timer.setInterval(EEPROM_BRIGHTNESS_PERIOD,writeBrightToEEPROM);
+  eepromBrightWriteTimer = timer.setInterval(TWO_MINUTE,writeBrightToEEPROM);
 
   // activeate the inverter, Set Bright
   setInverterPWMBrightness();  
@@ -1810,10 +1684,10 @@ byte setInverterPWMBrightness() {
     byte inverterMax = eepromRead(EEP_MAX_BRIGHT);
     int range = inverterMax - inverterMin;
     byte pwmValue = ( range * getInverterBright() / 100 ) + inverterMin;  
-    analogWrite(INVERTER_PWM,pwmValue);
+    analogWrite(INVERTER_POUT,pwmValue);
     return pwmValue;
   } else {
-    analogWrite(INVERTER_PWM,0);
+    analogWrite(INVERTER_POUT,0);
     return 0;
   }
 }
@@ -1855,196 +1729,73 @@ void processCommandBrightness(String subCmd, String extraCmd) {
 }
 
 //
-// --------------------------
-// Fan Output Control
-// --------------------------
+// ------------------
+// Fan Output Voltage
+// ------------------
 //
 
-// The output Fan RPM (or mVolts for LM317) we desire
-int targetFanValue[] = { MIN_FAN_VALUE, MIN_FAN_VALUE, MIN_FAN_VALUE }; 
+float targetVOLT = 3.3; // The output voltage we want to produce
+int fanVoltageControlTimer = -1; // timer that controls fan voltages
 
-// Set the Target Fan RPM (mVolt LM317) for a ALL Fans
-// This controls all Fans, setting them to the same value
-void setFanContolTarget(int value) {
-  for ( int fan=0; fan<FAN_COUNT; fan++ ) {
-    setFanContolTarget( fan, value );
-  }
-}
-
-// Set the Target Fan RPM ( cVolt LM317) for a specified Fan
-// this can be used for independant Fan Control.
-// Legacy Mode only support a singe (0) target
-void setFanContolTarget(byte fan,  int value) {
+/**
+ * Set the Target Fan Voltage
+ */
+void setFanTargetVolt(float volt) {
   
-  initFanController();
+  initFanVoltControl();
 
   // set the target voltage  
-  targetFanValue[fan] = value;
+  targetVOLT = volt;
 }
 
-// TARGET RPM (cVolt LM317)
-int getFanControlTarget(byte fan) {
-  return targetFanValue[fan];
+float getFanTargetVolt() {
+  return targetVOLT;
 }
-
-// Just a Default Midrange Value
-//byte currentPWM = 128; 
-
-//byte getCurrentPWM() {
-//  return currentPWM;
-//}
-
-// Just Default Mid Range Values
-byte currentPWM[] = { 128, 128, 128 }; 
-
-byte getCurrentPWM(byte fan) {
-  return currentPWM[fan];
-}
-
-int fanControlTimer = -1; // timer that controls fan voltages
-
-void initFanController() {
-  
-  if (fanControlTimer>=0) return;
-
-  // set up the three PWM outputs
-  for ( byte fan=0; fan<FAN_CONTROL_COUNT; fan++ ) {
-    
-    digitalWrite(FAN_CONTROL_PWM[fan],HIGH); // ensures minimum voltage
-    pinMode(FAN_CONTROL_PWM[fan],OUTPUT);   // PWM Output Pin For Fan
-    setPWMPrescaler(FAN_CONTROL_PWM[fan],FAN_CONTROL_PWM_PRESCALE[fan]); // Sets 31.25KHz / 256 = 122Hz Frequency
-  }
-  
-  // setup a timer that runs every 50 ms - To Set Fan Speed
-  fanControlTimer = timer.setInterval(FAN_CONTROL_PERIOD,readInputSetFanPWM);
-}
-
-#ifdef LEGACYBOARD
-
-//
-// --------------------------
-// Fan Output Voltage CONTROL
-// --------------------------
-//
 
 // PRIVATE ------------------
 
-// TODO The following is Legacy Code (LM317) eventually delete
+void initFanVoltControl() {
+  
+  if (fanVoltageControlTimer>=0) return;
 
-void readInputSetFanPWM() {
+  digitalWrite(FAN_CONTROL_POUT,HIGH); // ensures minimum voltage
+  pinMode(FAN_CONTROL_POUT,OUTPUT);   // PWM Output Pin For Fan
+  setPWMPrescaler(FAN_CONTROL_POUT,1); // Sets 31.25KHz Frequency
   
-#ifdef LEGACY-RPM
+    // setup a timer that runs every 50 ms - To Set Fan Speed
+  fanVoltageControlTimer = timer.setInterval(FIFTY_MILLIS,readVoltSetFanPWM);
+}
 
-  // Average to the Two Fans RPMS Speeds
-  int currentFanValue = ( getFanRPM(0) + getFanRPM(1) ) / 2;
-  
-#else
+// Roughly is equal to 3.3v NOTE Cannot be computed
+byte currentPWM = 150; 
 
-  // target centi Voltage produced by the LM317 
-  // *2 Voltage Divider *100 CentiVolt
-  int currentFanValue = 200.0f * readVoltage(FAN_OUTPUT_AIN);
+byte getCurrentPWM() {
+  return currentPWM;
+}
+
+void readVoltSetFanPWM() {
   
-#endif
+  // Roughly is equal to 3.3v NOTE Cannot be computed
+  //byte currentPWM = 150; 
+
+  // target PWM if fans are not active
+  float currentVolt = readVoltage(FAN_OUTPUT_AIN) * 2.0;
   
-  byte factor = compareCurrentAndTarget(currentFanValue,targetFanValue[0]);
-  
-  if ( currentFanValue > targetFanValue[0] ) {
+  if ( targetVOLT < currentVolt ) {
     
     // Slow fans down slowely, rather than hard off.
     // increasing PWM duty, lowers the voltage
-    currentPWM[0] = currentPWM[0]<(255-factor) ? currentPWM[0]+factor : 255;
+    currentPWM = currentPWM<255 ? currentPWM+1 : 255;
     
-  } else if ( currentFanValue < targetFanValue[0] ) {
+  } else if ( targetVOLT > currentVolt ) {
     
     // Slowly ramp up the fan speed, rather than hard on.
     // decreasing PWM duty, increases the voltage
-    currentPWM[0] = currentPWM[0]>factor ? currentPWM[0]-factor : 0;
+    currentPWM = currentPWM>0 ? currentPWM-1 : 0;
   }
   
   // write the PWM  
-  analogWrite(FAN_CONTROL_PWM[0],currentPWM[0]);
-}
-
-#else 
-
-//
-// ----------------------
-// FAN OUTPUT RPM CONTROL
-// ----------------------
-// 
-
-// PRIVATE ------------------
-
-// called by a timer every second
-void readInputSetFanPWM() {
-  
-  for ( byte fan=0; fan<FAN_COUNT; fan++ ) {
-
-    // target RPM if fans are not active
-    int currentFanValue = getFanRPM(fan);
-  
-    // what is a easonable amount to change PWM by
-    byte factor = compareCurrentAndTarget(currentFanValue,targetFanValue[fan]);
-  
-    // todo consider damping the Fan RPM Input by shortening the sample time of the fan
-    // relative to the last PWM adjustment, i.e. adjust every 2 seconds, but sample only last 1 second FAN RPM
-    // the point being that the fan takes time to adjust.
-    
-    // todo need to put a scope on this and measure
-    // VOLTAGE profile of the fan
-    // PWM signal coming off the Arduino.
-    // RPM of the Fan, pullup resistor, or could get arduino tom monitor it.
-    // Voltage of the control Signal.
-    
-    // todo sketch to control the fans as per this sketch with VIN (POT) to control RPM
-    // todo with full monitoring.
-    // Event just monitor RPM, and see what varianc we get from one second to the next. 
-  
-    if ( currentFanValue < targetFanValue[fan] ) {
-    
-      // Slow fans down slowely, rather than hard off.
-      // increasing PWM duty, lowers the voltage
-      currentPWM[fan] = currentPWM[fan]<(255-factor) ? currentPWM[fan]+factor : 255;
-    
-    } else if ( currentFanValue > targetFanValue[fan] ) {
-    
-      // Slowly ramp up the fan speed, rather than hard on.
-      // decreasing PWM duty, increases the voltage
-      currentPWM[fan] = currentPWM[fan]>factor ? currentPWM[fan]-factor : 0;
-    }
-  
-    // write the PWM  
-    analogWrite(FAN_CONTROL_PWM[fan],currentPWM[fan]);
-  }
-}
-
-#endif
-
-// <5% - then 0
-// <10% - then just inc / dec by 1
-// <20% - 3
-// <50% - 5
-// >50% - 10
-byte compareCurrentAndTarget(int current, int target) {
-  
-  int diff = current-target;
-  if (diff < 0) diff = diff * -1;
-  float percent = (float)diff / (float)target;
-  
-  if (percent<5) {
-    return 0;
-  } else if (percent <10) {
-    return 1;
-  } else if (percent <20) {
-    return 3;
-  } else if (percent <30) {
-    return 6;
-  } else if (percent <40) {
-    return 10;
-  } else if (percent <50) {
-    return 15;
-  }
-  return 20;
+  analogWrite(FAN_CONTROL_POUT,currentPWM);
 }
 
 //
@@ -2053,49 +1804,14 @@ byte compareCurrentAndTarget(int current, int target) {
 // ------------
 //
 
-long delayBeforeChime;
+
+long dealybeforeSounding;
 
 void initiateTimedChime( long delayBefore ) {
   
    // DEBUG
   DEBUG_PRINTF("CHIME");
-  
-    // set the time to wait
-  delayBeforeChime = delayBefore;
-
-  // setup a timer to press the button  
-  timer.setVariableTimer(chimeOutputCallback);
 }
-
-long chimeOutputCallback(int state) {
-  
-  if (state==0) {
-    
-    return delayBeforeChime;
-
-  } else if (state==1) {
-    
-    // then configure it for output activate pin
-    pinMode(CHIME_POUT,OUTPUT);
-    digitalWrite(CHIME_POUT,LOW);
-
-    // DEBUG
-    DEBUG_PRINTF("Chime - Activated");
-
-    return CHIME_ACTIVATION_TIME;
-    
-  } else if (state==2) {  
-    
-    // DEBUG
-    DEBUG_PRINTF("Chime - Released");
-
-    // initialise the pin for input
-    pinMode(CHIME_POUT,INPUT);
-    
-    return 0L;
-  }
-}
-
 
 // PRIVATE ------------------
 
@@ -2108,13 +1824,21 @@ long chimeOutputCallback(int state) {
 boolean psuIsActive = true;
 unsigned long millsWhenPSUActivated = millis();
 
+// writes active time to eprom
+void flushPSUActiviation() {
+  if ( psuIsActive ) {
+    addToCounter(EEP_TIM_SYSTEM,(millis()-millsWhenPSUActivated)/1000L );
+    millsWhenPSUActivated = millis();
+  }
+}
+
 void activatePSU () {
 
   if ( ! psuIsActive ) {
     digitalWrite(PSU_DEACTIVATE_POUT,LOW);
     pinMode(PSU_DEACTIVATE_POUT,INPUT);
     psuIsActive = true;
-    millsWhenPSUActivated = millis();
+    millsWhenPSUActivated = millis(); // reset counter
     
     DEBUG_PRINTF("PSU Activated");
   }
@@ -2123,10 +1847,11 @@ void activatePSU () {
 void deactivatePSU () {
   
   if ( psuIsActive ) {
+    flushPSUActiviation(); // write active time to eeprom
+    
     pinMode(PSU_DEACTIVATE_POUT,OUTPUT);
     digitalWrite(PSU_DEACTIVATE_POUT,HIGH);
     psuIsActive = false;
-    addToCounter(EEP_TIM_SYSTEM,(millis()-millsWhenPSUActivated)/1000L );
     
     DEBUG_PRINTF("PSU Deactivated");
   }
@@ -2138,10 +1863,10 @@ void deactivatePSU () {
 // ----------------------------------
 //
 
-#define LEDMODE_NORMAL 0
-#define LEDMODE_BREATH 10
-#define LEDMODE_RAMPUP 20 
-#define LEDMODE_RAMPDN 30
+const byte LEDMODE_NORMAL = 0;
+const byte LEDMODE_BREATH = 10;
+const byte LEDMODE_RAMPUP = 20; 
+const byte LEDMODE_RAMPDN = 30;
 
 byte ledBrightnessMode = LEDMODE_NORMAL; // are we using any special features
 byte targetLEDBright = 0; // what the brightness should be, smoothing
@@ -2153,7 +1878,7 @@ unsigned long ledFlashStartTime = 0; // is there a duration of the effect (fade)
  * Turns off the front panel LED
  */
 void deactivateFrontPanelLED() {  
-  setFrontPanelLEDBright(0);
+  setFrontPanelLEDBright(ZERO);
 }
 
 void activateFrontPanelLEDBreath() {
@@ -2202,9 +1927,6 @@ void setFrontPanelLEDEffect(byte mode, unsigned long duration) {
 
 // PRIVATE ------------------ 
 
-//period that the LED Timer Runs
-#define LED_TIMER_PERIOD 5
-
 void initLEDBrightness() {
 
   static int ledBrightnessTimer = -1; // timer number in use
@@ -2220,7 +1942,7 @@ void initLEDBrightness() {
   // at a defined rate 0-255 full brightness in 100ms ie
   // from full on to full off in a 1/10 of a second, 
   // this gives a cleaner looking LED
-  ledBrightnessTimer = timer.setInterval(LED_TIMER_PERIOD,ledBrightnessCallback);
+  ledBrightnessTimer = timer.setInterval(FIVE_MILLIS,ledBrightnessCallback);
 }
 
 // Callback function actiually sets LED brightness
@@ -2322,21 +2044,18 @@ float computeFlash() {
 float computeBreath(unsigned long timeInCycle) {
   
   // how much time has elapsed in the 5 second breath cycle.
-  long timeInBreathCycle = timeInCycle % LED_BREATH_CYCLE_TIME;
-  
-  static float breathInTime = LED_BREATH_CYCLE_TIME * 3 / 10;
-  static float breathOutTime = LED_BREATH_CYCLE_TIME * 7 / 10;
+  long timeInBreathCycle = timeInCycle % FIVE_SECOND;
   
   // when in the first 1.5 seconds
-  if ( timeInBreathCycle <= breathInTime ) {
+  if ( timeInBreathCycle <= 1500 ) {
 
     // simple cos function that ramps up    
-    return computeTrigFactor( (float)timeInBreathCycle/breathInTime );
+    return computeTrigFactor( (float)timeInBreathCycle/1500.0f );
     
   } else {
     
     // convert to a decreasing value from 1 to 0, cos function raised to power 1.8
-    return pow( computeTrigFactor((float)(LED_BREATH_CYCLE_TIME-timeInBreathCycle)/breathOutTime), 1.8f );
+    return pow( computeTrigFactor((float)(5000-timeInBreathCycle)/3500.0f), 1.8f );
   }
 }
 
@@ -2449,59 +2168,59 @@ void processCommand(String cmd) {
 
 void processCommandSystem(String subCmd, String extraCmd) {
   
-  if (subCmd.equals("R")) {
+  if (subCmd.equals("S")) {
     
-    // System Ram Available in bytes. Leonamrdo has 2.5Kbyes
-    Serial.print(F("FreeRAM "));
-    Serial.print(freeRam());    
-    Serial.println(F(" of 2560 bytes"));
+    flushPSUActiviation(); // Flushes PSU Time to EEPROM
+    flushLCDActiviation();
     
-  } else if (subCmd.equals("C")) {
+    Serial.println();
     
     Serial.print("SMC Power Cycles ");
     Serial.println(eepromRead(EEP_CYC_SMC));
+
     Serial.print("Power On  Cycles ");
     Serial.println(eepromRead(EEP_CYC_POWER));
+
     Serial.print("Sleep     Cycles ");
     Serial.println(eepromRead(EEP_CYC_SLEEP));
     
+    Serial.print(F("Powered Hours "));
+    printHours(eepromRead(EEP_TIM_SYSTEM));
+    Serial.println();
+
+    Serial.print(F("Active  Hours "));
+    printHours(eepromRead(EEP_TIM_SYSTEM)-eepromRead(EEP_TIM_SLEEP));
+    Serial.println();
+    
+    Serial.print(F("LCD     Hours "));
+    printHours(eepromRead(EEP_TIM_LCD));
+    Serial.println();
+
+    
   } else if (subCmd.equals("U")) {
     
+    Serial.println();
+    
+    // System Timers in-use
+    Serial.print(F("Threads used "));
+    Serial.print(timer.getNumTimers());    
+    Serial.println(F(" of 10"));
 
-    
-    Serial.print(F("Wake    Time "));
-    printTime((millis()-millsOfLastWakFromSleep)/1000L);
-    Serial.println();
-    
-    Serial.print(F("T Wake  Time "));
-    printTime((millis()-millsWhenPSUActivated)/1000L+eepromRead(EEP_TIM_SYSTEM)-eepromRead(EEP_TIM_SLEEP));
-    Serial.println();
-    
-    Serial.print(F("PowerOn Time "));
-    printTime((millis()-millsOfLastStartup)/1000L);
-    Serial.println();
+    // System Ram Available in bytes. Leonamrdo has 2.5Kbyes
+    Serial.print(F("RAM in use "));
+    Serial.print(2560L - freeRam());    
+    Serial.println(F(" of 2560 bytes"));
 
-    Serial.print(F("T Power Time "));
-    printTime((millis()-millsWhenPSUActivated)/1000L+eepromRead(EEP_TIM_SYSTEM));
-    Serial.println();
-
-    Serial.print(F("Tot LCD Time "));
-    printTime((millis()-millsWhenLCDActivated)/1000L+eepromRead(EEP_TIM_LCD));
-    Serial.println();
-    
-    Serial.print(F("SMC Up  Time "));
+    Serial.print(F("SMC Up Time "));
     printTime(millis()/1000L);
     Serial.println();
 
-  } else if (subCmd.equals("T")) {
-    // System Timers in-use
-    Serial.print(F("Timers In Use "));
-    Serial.println(timer.getNumTimers());    
-    Serial.print(F("Timers Unused "));
-    Serial.println(timer.getNumAvailableTimers());    
-
+    Serial.print(F("CPU Up Time "));
+    printTime((millis()-millsOfLastStartup)/1000L);
+    Serial.println();
+    
   } else {
-    Serial.println(F("System Command Unknown: R (ram), C (cycles), U (uptime), T (timers)"));
+    Serial.println(F("System Command Unknown: S (stats), U (uptime)"));
   }
 }
 
@@ -2517,16 +2236,25 @@ void printTime( unsigned long secs ) {
       Serial.print(days);
       Serial.print(F(" Days "));
     }
-    if (hrs<10) Serial.print(ZERO);
+    if (hrs<10) Serial.print(ZERO_CHAR);
     Serial.print(hrs);
     Serial.print(COLON);    
-    if (mins<10) Serial.print(ZERO);
+    if (mins<10) Serial.print(ZERO_CHAR);
     Serial.print(mins);
     if (days==0) {
       Serial.print(COLON);    
-      if (secs<10) Serial.print(ZERO);
+      if (secs<10) Serial.print(ZERO_CHAR);
       Serial.print(secs);  
     }
+}
+
+void printHours( unsigned long secs ) {
+  
+    unsigned long hrs = secs / 3600;
+    unsigned long decimal = (secs - (hrs*3600)) / 360L;
+    Serial.print(hrs);
+    Serial.print(".");
+    Serial.print(decimal);
 }
 
 #endif
