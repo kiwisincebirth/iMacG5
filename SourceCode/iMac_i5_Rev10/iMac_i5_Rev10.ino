@@ -28,7 +28,7 @@ __asm volatile ("nop");
 #define LEGACYBOARD // supports the legacy fan control LM317, proto board  
 #define LEGACY-RPM // Legacy Controlled by RPM Inputs, not LM317
 #define COMMANDABLE // has all commands not just brightness
-//#define CAPACITIVE // support for cap touch sensors
+#define CAPACITIVE // support for cap touch sensors
 #define TEMPERATURE // temperature intput for fans
 
 #include <DebugUtils.h>
@@ -97,6 +97,12 @@ __asm volatile ("nop");
 
 // time intervale to attempt write of Brightness to EEPROM, burnout protection
 #define EEPROM_BRIGHTNESS_PERIOD 120000
+
+// amount of times the sensor is read
+#define CAPACITIVE_SENSOR_READ_PERIOD 300
+
+// time between capacitive recalibration - 10 minutes
+#define CAPACITIVE_RECALIBRATE_PERIOD 600000
 
 // Some important constants
 #define SERIAL_BAUD_RATE 9600
@@ -1024,10 +1030,10 @@ void activateCapTouchBright() {
     if ( getUpSensorReading() < 0 && getUpSensorReading() < 0 ) return;
 
     // Timer to do a periodic calibrate
-    timer.setInterval( TEN_MINUTE, calibrateSensorReading );
+    timer.setInterval( CAPACITIVE_RECALIBRATE_PERIOD, calibrateSensorReading );
 
     // Timer, which triggers the Touch Sensor Control every 300ms, for brightness
-    capacitiveTimer = timer.setInterval(THREE_HUNDRED_MILLIS,touchControl);
+    capacitiveTimer = timer.setInterval( CAPACITIVE_SENSOR_READ_PERIOD ,touchControl);
   }
   
   calibrateSensorReading();
