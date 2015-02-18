@@ -172,24 +172,12 @@ __asm volatile ("nop");
 #define NUC_POWER_LED_VCC_PIN 14
 #define NUC_POWER_LED_GND_PIN 15
 
-// --------------------- FAN CONTROL
+// ---------------------- FAN VOLTAGE INPUT
 
 // Fan Voltage Input Analog Detection
 #define FAN_OUTPUT_AIN A2
 
-// PWM Fan Speed Voltage OUTPUT
-#define FAN_CONTROL_PWM 9 
-
-// Values in Millivolts
-#define OFF_FAN_VALUE 0
-#define MIN_FAN_VALUE 330
-#define MAX_FAN_VALUE 1200
-
-// Digital Pin For Temps
-#define TEMP_PIN 16
-
-// -- temporary implementation
-
+// NUMBER OF FAN NPUTS
 #define FAN_COUNT 2
 
 // The Pins For Fan Input
@@ -198,6 +186,30 @@ const byte FAN_RPM_PIN[] = { 0, 1 };
 // Interrupts that fans are attached to.
 #define FAN1_INTERRUPT 2 
 #define FAN2_INTERRUPT 3 
+
+// --------------------- FAN CONTROL
+
+// Time between controlling the Fans
+#define FAN_CONTROL_PERIOD 50
+
+// Number of Output Fan Control PWM's
+#define FAN_CONTROL_COUNT 1
+
+// PWM Fan Speed Voltage OUTPUT
+const byte FAN_CONTROL_PWM[] = { 9 } ;
+
+// Prescale Values for controlling PWM
+const int FAN_CONTROL_PWM_PRESCALE[] = {1};
+
+// Values in Millivolts
+#define OFF_FAN_VALUE 0
+#define MIN_FAN_VALUE 330
+#define MAX_FAN_VALUE 1200
+
+// -------------------- TEMPS 
+
+// Digital Pin For Temps
+#define TEMP_PIN 16
 
 // -------------------- INVERTER 
 
@@ -239,6 +251,7 @@ const byte FAN_RPM_PIN[] = { 0, 1 };
 
 // ---------------------- FAN SPEED PINS
 
+// NUMBER OF FAN NPUTS
 #define FAN_COUNT 3
 
 // The Pins For Fan Input
@@ -251,13 +264,24 @@ const byte FAN_RPM_PIN[] = { 1, 2, 7 };
 
 // --------------------- FAN CONTROL
 
+// Time between controlling the Fans
+#define FAN_CONTROL_PERIOD 1000
+
+// Number of Output Fan Control PWM's
+#define FAN_CONTROL_COUNT 3
+
 // Fan Control Outputs
 const byte FAN_CONTROL_PWM[] = { 9, 6, 10 } ;
+
+// Prescale Values for controlling PWM
+const int FAN_CONTROL_PWM_PRESCALE[] = { 256, 256, 256 };
 
 // Values in RPM
 #define OFF_FAN_VALUE 0
 #define MIN_FAN_VALUE 900
 #define MAX_FAN_VALUE 4000
+
+// -------------------- TEMPS 
 
 // Digital Pin For Temps
 #define TEMP_PIN A2
@@ -1178,15 +1202,11 @@ void processCommandFan(String subCmd, String extraCmd) {
     Serial.print(F("Fans Set To Max"));
     setFanContolTarget( MAX_FAN_VALUE );
 
-/*
-
   } else if (subCmd.equals("L")) {
     activateTempFanMonitor();
     
   } else if (subCmd.equals("O")) {
     deactivateTempFanMonitor();
-
-*/
 
   } else {
     Serial.println(F("Fan Command Unknown: FM (max), FA (activate), FD (deactivate), FL (log), FO (log off)"));
@@ -1231,26 +1251,18 @@ float computeTempFactor( float temp ) {
 
 #ifdef COMMANDABLE
 
-/*
-
 void printFanDetails() {
     Serial.print(getAmbientTemp());
     Serial.print(F("\t"));
     Serial.print(getTempDiff());
-#ifdef LEGACYBOARD
     Serial.print(F("\t"));
-    Serial.print(getFanTargetVolt());
-    Serial.print(F("\t"));
-    Serial.print(readVoltage(FAN_OUTPUT_AIN) * 2.0); // Current Voltage
-#endif
-    Serial.print(F("\t"));
-    Serial.print(getCurrentPWM()); // Current PWM
+    Serial.print(getFanControlTarget(0));
     Serial.print(F("\t"));
     Serial.print(getFanRPM(0));
     Serial.print(F("\t"));
     Serial.print(getFanRPM(1));
     Serial.print(F("\t"));
-    Serial.print(getFanRPM(2));
+    Serial.print(getCurrentPWM(0)); // Current PWM
     Serial.println(); 
 }
 
@@ -1279,8 +1291,6 @@ void deactivateTempFanMonitor() {
   // disable the timer if it exists
   if (tempFanMonitorTimer >=0 ) timer.disable(tempFanMonitorTimer);  
 }
-
-*/
 
 #endif
 
@@ -1860,7 +1870,6 @@ void processCommandBrightness(String subCmd, String extraCmd) {
 
 // The output Fan RPM (or mVolts for LM317) we desire
 int targetFanValue[] = { MIN_FAN_VALUE, MIN_FAN_VALUE, MIN_FAN_VALUE }; 
-int fanControlTimer = -1; // timer that controls fan voltages
 
 // Set the Target Fan RPM (mVolt LM317) for a ALL Fans
 // This controls all Fans, setting them to the same value
@@ -1870,8 +1879,9 @@ void setFanContolTarget(int value) {
   }
 }
 
-// Set the Target Fan RPM for a specified Fan
-// this only makes sense on Independantly controlled PWM Fans
+// Set the Target Fan RPM ( cVolt LM317) for a specified Fan
+// this can be used for independant Fan Control.
+// Legacy Mode only support a singe (0) target
 void setFanContolTarget(byte fan,  int value) {
   
   initFanController();
@@ -1880,14 +1890,44 @@ void setFanContolTarget(byte fan,  int value) {
   targetFanValue[fan] = value;
 }
 
-//int getFanTargetValue(byte fan) {
-//  return targetFanValue[fan];
+// TARGET RPM (cVolt LM317)
+int getFanControlTarget(byte fan) {
+  return targetFanValue[fan];
+}
+
+// Just a Default Midrange Value
+//byte currentPWM = 128; 
+
+//byte getCurrentPWM() {
+//  return currentPWM;
 //}
 
-#ifdef LEGACYBOARD
+// Just Default Mid Range Values
+byte currentPWM[] = { 128, 128, 128 }; 
 
-// Time between controlling the Fans
-#define FAN_CONTROL_PERIOD 50
+byte getCurrentPWM(byte fan) {
+  return currentPWM[fan];
+}
+
+int fanControlTimer = -1; // timer that controls fan voltages
+
+void initFanController() {
+  
+  if (fanControlTimer>=0) return;
+
+  // set up the three PWM outputs
+  for ( byte fan=0; fan<FAN_CONTROL_COUNT; fan++ ) {
+    
+    digitalWrite(FAN_CONTROL_PWM[fan],HIGH); // ensures minimum voltage
+    pinMode(FAN_CONTROL_PWM[fan],OUTPUT);   // PWM Output Pin For Fan
+    setPWMPrescaler(FAN_CONTROL_PWM[fan],FAN_CONTROL_PWM_PRESCALE[fan]); // Sets 31.25KHz / 256 = 122Hz Frequency
+  }
+  
+  // setup a timer that runs every 50 ms - To Set Fan Speed
+  fanControlTimer = timer.setInterval(FAN_CONTROL_PERIOD,readInputSetFanPWM);
+}
+
+#ifdef LEGACYBOARD
 
 //
 // --------------------------
@@ -1899,26 +1939,7 @@ void setFanContolTarget(byte fan,  int value) {
 
 // TODO The following is Legacy Code (LM317) eventually delete
 
-void initFanController() {
-  
-  if (fanControlTimer>=0) return;
-
-  digitalWrite(FAN_CONTROL_PWM,HIGH); // ensures minimum voltage
-  pinMode(FAN_CONTROL_PWM,OUTPUT);   // PWM Output Pin For Fan
-  setPWMPrescaler(FAN_CONTROL_PWM,1); // Sets 31.25KHz Frequency
-  
-    // setup a timer that runs every 50 ms - To Set Fan Speed
-  fanControlTimer = timer.setInterval(FAN_CONTROL_PERIOD,readVoltSetFanPWM);
-}
-
-// Just a Default Midrange Value
-byte currentPWM = 128; 
-
-byte getCurrentPWM() {
-  return currentPWM;
-}
-
-void readVoltSetFanPWM() {
+void readInputSetFanPWM() {
   
 #ifdef LEGACY-RPM
 
@@ -1939,17 +1960,17 @@ void readVoltSetFanPWM() {
     
     // Slow fans down slowely, rather than hard off.
     // increasing PWM duty, lowers the voltage
-    currentPWM = currentPWM<(255-factor) ? currentPWM+factor : 255;
+    currentPWM[0] = currentPWM[0]<(255-factor) ? currentPWM[0]+factor : 255;
     
   } else if ( currentFanValue < targetFanValue[0] ) {
     
     // Slowly ramp up the fan speed, rather than hard on.
     // decreasing PWM duty, increases the voltage
-    currentPWM = currentPWM>factor ? currentPWM-factor : 0;
+    currentPWM[0] = currentPWM[0]>factor ? currentPWM[0]-factor : 0;
   }
   
   // write the PWM  
-  analogWrite(FAN_CONTROL_PWM,currentPWM);
+  analogWrite(FAN_CONTROL_PWM[0],currentPWM[0]);
 }
 
 #else 
@@ -1960,36 +1981,10 @@ void readVoltSetFanPWM() {
 // ----------------------
 // 
 
-// Time between controlling the Fans
-#define FAN_CONTROL_PERIOD 1000
-
 // PRIVATE ------------------
 
-void initFanController() {
-  
-  if (fanControlTimer>=0) return;
-
-  // set up the three PWM outputs
-  for ( byte i=0; i<3; i++ ) {
-    
-    digitalWrite(FAN_CONTROL_PWM[i],HIGH); // ensures minimum voltage
-    pinMode(FAN_CONTROL_PWM[i],OUTPUT);   // PWM Output Pin For Fan
-    setPWMPrescaler(FAN_CONTROL_PWM[i],256); // Sets 31.25KHz / 256 = 122Hz Frequency
-  }
-  
-  // setup a timer that runs every 50 ms - To Set Fan Speed
-  fanControlTimer = timer.setInterval(FAN_CONTROL_PERIOD,readRPMSetFanPWM);
-}
-
-// Just Default Mid Range Values
-byte currentPWM[] = { 128, 128, 128 }; 
-
-byte getCurrentPWM(byte fan) {
-  return currentPWM[fan];
-}
-
 // called by a timer every second
-void readRPMSetFanPWM() {
+void readInputSetFanPWM() {
   
   for ( byte fan=0; fan<FAN_COUNT; fan++ ) {
 
