@@ -26,9 +26,9 @@ __asm volatile ("nop");
 
 //#define DEBUG // enables debig mode
 #define LEGACYBOARD // supports the legacy fan control LM317, proto board  
-#define LEGACY-RPM // Legacy Controlled by RPM Inputs, not LM317
+//#define LEGACY-RPM // Legacy Controlled by RPM Inputs, not LM317
 #define COMMANDABLE // has all commands not just brightness
-#define CAPACITIVE // support for cap touch sensors
+//#define CAPACITIVE // support for cap touch sensors
 #define TEMPERATURE // temperature intput for fans
 
 #include <DebugUtils.h>
@@ -207,10 +207,16 @@ const byte FAN_CONTROL_PWM[] = { 9 } ;
 // Prescale Values for controlling PWM
 const int FAN_CONTROL_PWM_PRESCALE[] = {1};
 
+#ifdef LEGACY-RPM
+
+#else
+
 // Values in Millivolts
 #define OFF_FAN_VALUE 0
 #define MIN_FAN_VALUE 330
 #define MAX_FAN_VALUE 1200
+
+#endif
 
 // -------------------- TEMPS 
 
@@ -1882,29 +1888,16 @@ void setFanContolTarget(int value) {
 // Legacy Mode only support a singe (0) target
 void setFanContolTarget(byte fan,  int value) {
   
-  initFanController();
-
   // set the target voltage  
   targetFanValue[fan] = value;
+  
+  // init the controller
+  initFanController();
 }
 
 // TARGET RPM (cVolt LM317)
 int getFanControlTarget(byte fan) {
   return targetFanValue[fan];
-}
-
-// Just a Default Midrange Value
-//byte currentPWM = 128; 
-
-//byte getCurrentPWM() {
-//  return currentPWM;
-//}
-
-// Just Default Mid Range Values
-byte currentPWM[] = { 128, 128, 128 }; 
-
-byte getCurrentPWM(byte fan) {
-  return currentPWM[fan];
 }
 
 int fanControlTimer = -1; // timer that controls fan voltages
@@ -1923,6 +1916,13 @@ void initFanController() {
   
   // setup a timer that runs every 50 ms - To Set Fan Speed
   fanControlTimer = timer.setInterval(FAN_CONTROL_PERIOD,readInputSetFanPWM);
+}
+
+// Just Default Mid Range PWM Values
+byte currentPWM[] = { 128, 128, 128 }; 
+
+byte getCurrentPWM(byte fan) {
+  return currentPWM[fan];
 }
 
 #ifdef LEGACYBOARD
