@@ -1991,14 +1991,9 @@ void readRPMSetFanPWM() {
     // target RPM if fans are not active
     int currentFanRPM = getFanRPM(fan);
   
-    // todo Need to work out a percentage difference IF
-    // <5% - then 0
-    // <10% - then just inc / dec by 1
-    // <20% - 3
-    // <50% - 5
-    // >50% - 10
-    // then add or subtract this value.
-    
+    // what is a easonable amount to change PWM by
+    byte factor = compareCurrentAndTarget(currentFanRPM,targetFanValue[fan]);
+  
     // todo consider damping the Fan RPM Input by shortening the sample time of the fan
     // relative to the last PWM adjustment, i.e. adjust every 2 seconds, but sample only last 1 second FAN RPM
     // the point being that the fan takes time to adjust.
@@ -2013,17 +2008,17 @@ void readRPMSetFanPWM() {
     // todo with full monitoring.
     // Event just monitor RPM, and see what varianc we get from one second to the next. 
   
-    if ( currentFanRPM > targetFanValue[fan] ) {
+    if ( currentFanRPM < targetFanValue[fan] ) {
     
       // Slow fans down slowely, rather than hard off.
       // increasing PWM duty, lowers the voltage
-      currentPWM[fan] = currentPWM[fan]<255 ? currentPWM[fan]-1 : 255;
+      currentPWM[fan] = currentPWM[fan]<(255-factor) ? currentPWM[fan]+factor : 255;
     
-    } else if ( currentFanRPM < targetFanValue[fan] ) {
+    } else if ( currentFanRPM > targetFanValue[fan] ) {
     
       // Slowly ramp up the fan speed, rather than hard on.
       // decreasing PWM duty, increases the voltage
-      currentPWM[fan] = currentPWM[fan]>0 ? currentPWM[fan]+1 : 0;
+      currentPWM[fan] = currentPWM[fan]>factor ? currentPWM[fan]-factor : 0;
     }
   
     // write the PWM  
@@ -2032,6 +2027,33 @@ void readRPMSetFanPWM() {
 }
 
 #endif
+
+// <5% - then 0
+// <10% - then just inc / dec by 1
+// <20% - 3
+// <50% - 5
+// >50% - 10
+byte compareCurrentAndTarget(int current, int target) {
+  
+  int diff = current-target;
+  if (diff < 0) diff = diff * -1;
+  float percent = (float)diff / (float)target;
+  
+  if (percent<5) {
+    return 0;
+  } else if (percent <10) {
+    return 1;
+  } else if (percent <20) {
+    return 3;
+  } else if (percent <30) {
+    return 6;
+  } else if (percent <40) {
+    return 10;
+  } else if (percent <50) {
+    return 15;
+  }
+  return 20;
+}
 
 //
 // ------------
