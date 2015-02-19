@@ -26,7 +26,7 @@ __asm volatile ("nop");
 
 //#define DEBUG // enables debig mode
 #define LEGACYBOARD // supports the legacy fan control LM317, proto board  
-//#define LEGACY-RPM // Legacy Controlled by RPM Inputs, not LM317
+#define LEGACY-RPM // Legacy Controlled by RPM Inputs, not LM317
 #define COMMANDABLE // has all commands not just brightness
 //#define CAPACITIVE // support for cap touch sensors
 #define TEMPERATURE // temperature intput for fans
@@ -195,8 +195,17 @@ const byte FAN_RPM_PIN[] = { 0, 1 };
 
 // --------------------- FAN CONTROL
 
+#ifdef LEGACY-RPM
+
 // Time between controlling the Fans
-#define FAN_CONTROL_PERIOD 50
+#define FAN_CONTROL_PERIOD 1000
+
+#else
+
+// Time between controlling the Fans
+#define FAN_CONTROL_PERIOD 100
+
+#endif
 
 // Number of Output Fan Control PWM's
 #define FAN_CONTROL_COUNT 1
@@ -210,14 +219,14 @@ const int FAN_CONTROL_PWM_PRESCALE[] = {1};
 #ifdef LEGACY-RPM
 
 // Values in RPM
-#define OFF_FAN_VALUE 0
-#define MIN_FAN_VALUE 900
-#define MAX_FAN_VALUE 4000
+#define OFF_FAN_VALUE 100
+#define MIN_FAN_VALUE 1200
+#define MAX_FAN_VALUE 5000
 
 #else
 
 // Values in Millivolts
-#define OFF_FAN_VALUE 0
+#define OFF_FAN_VALUE 100
 #define MIN_FAN_VALUE 330
 #define MAX_FAN_VALUE 1200
 
@@ -282,7 +291,7 @@ const byte FAN_RPM_PIN[] = { 1, 2, 7 };
 // --------------------- FAN CONTROL
 
 // Time between controlling the Fans
-#define FAN_CONTROL_PERIOD 1000
+#define FAN_CONTROL_PERIOD 5000
 
 // Number of Output Fan Control PWM's
 #define FAN_CONTROL_COUNT 3
@@ -388,15 +397,15 @@ const char PROGMEM string_05[] PROGMEM = "MinTemp-.01c";
 const char PROGMEM string_06[] PROGMEM = "MaxTemp-.01c";
 #ifdef LEGACYBOARD
   #ifdef LEGACY-RPM
-const char PROGMEM string_07[] PROGMEM = "MinRPM"; // redefined to be RPM Range for the Fans
-const char PROGMEM string_08[] PROGMEM = "MaxRPM";
+const char PROGMEM string_07[] PROGMEM = "MinRPM    "; // redefined to be RPM Range for the Fans
+const char PROGMEM string_08[] PROGMEM = "MaxRPM    ";
   #else
 const char PROGMEM string_07[] PROGMEM = "MinVolt-.01v";
 const char PROGMEM string_08[] PROGMEM = "MaxVolt-.01v";
   #endif
 #else
-const char PROGMEM string_07[] PROGMEM = "MinRPM"; // redefined to be RPM Range for the Fans
-const char PROGMEM string_08[] PROGMEM = "MaxRPM";
+const char PROGMEM string_07[] PROGMEM = "MinRPM    "; // redefined to be RPM Range for the Fans
+const char PROGMEM string_08[] PROGMEM = "MaxRPM    ";
 #endif
 const char PROGMEM string_09[] PROGMEM = "CapDnThresh"; 
 const char PROGMEM string_10[] PROGMEM = "CapUpThresh";
@@ -1202,6 +1211,8 @@ void deactivateTempFanControl() {
 
 // PRIVATE ------------------
 
+boolean debugFans = false;
+
 #ifdef COMMANDABLE
 
 /*
@@ -1225,10 +1236,12 @@ void processCommandFan(String subCmd, String extraCmd) {
     setFanContolTarget( MAX_FAN_VALUE );
 
   } else if (subCmd.equals("L")) {
-    activateTempFanMonitor();
+    //activateTempFanMonitor();
+    debugFans = true;
     
   } else if (subCmd.equals("O")) {
-    deactivateTempFanMonitor();
+    //deactivateTempFanMonitor();
+    debugFans = false;
 
   } else {
     Serial.println(F("Fan Command Unknown: FM (max), FA (activate), FD (deactivate), FL (log), FO (log off)"));
@@ -1273,6 +1286,8 @@ float computeTempFactor( float temp ) {
 
 #ifdef COMMANDABLE
 
+/*
+
 void printFanDetails() {
     Serial.print(getAmbientTemp());
     Serial.print(F("\t"));
@@ -1313,6 +1328,8 @@ void deactivateTempFanMonitor() {
   // disable the timer if it exists
   if (tempFanMonitorTimer >=0 ) timer.disable(tempFanMonitorTimer);  
 }
+
+*/
 
 #endif
 
@@ -1937,7 +1954,7 @@ void initFanController() {
 }
 
 // Just Default Mid Range PWM Values
-byte currentPWM[] = { 128, 128, 128 }; 
+byte currentPWM[] = { 30, 30, 30 }; 
 
 byte getCurrentPWM(byte fan) {
   return currentPWM[fan];
@@ -1970,8 +1987,8 @@ void readInputSetFanPWM() {
   
 #endif
   
-  byte factor = 1;
-  //byte factor = compareCurrentAndTarget(currentFanValue,targetFanValue[0]);
+  //byte factor = 1;
+  byte factor = compareCurrentAndTarget(currentFanValue,targetFanValue[0]);
   
   if ( currentFanValue > targetFanValue[0] ) {
     
@@ -1984,6 +2001,21 @@ void readInputSetFanPWM() {
     // Slowly ramp up the fan speed, rather than hard on.
     // decreasing PWM duty, increases the voltage
     currentPWM[0] = currentPWM[0]>=factor ? currentPWM[0]-factor : 0;
+  }
+
+  if ( debugFans ) {  
+    //Serial.print(getAmbientTemp());
+    //Serial.print(F("\t"));
+    //Serial.print(getTempDiff());
+    //Serial.print(F("\t"));
+    Serial.print(factor);
+    Serial.print(F("\t"));
+    Serial.print(targetFanValue[0]);
+    Serial.print(F("\t"));
+    Serial.print(currentFanValue);
+    Serial.print(F("\t"));
+    Serial.print(currentPWM[0]); // Current PWM
+    Serial.println(); 
   }
   
   // write the PWM  
@@ -2054,22 +2086,22 @@ byte compareCurrentAndTarget(int current, int target) {
   
   int diff = current-target;
   if (diff < 0) diff = diff * -1;
-  float percent = (float)diff / (float)target;
+  byte percent = 100.0f* (float)diff / (float)target;
   
   if (percent<5) {
     return 0;
   } else if (percent <10) {
     return 1;
   } else if (percent <20) {
-    return 3;
+    return 1;
   } else if (percent <30) {
-    return 6;
+    return 2;
   } else if (percent <40) {
-    return 10;
+    return 3;
   } else if (percent <50) {
-    return 15;
+    return 4;
   }
-  return 20;
+  return 5;
 }
 
 //
