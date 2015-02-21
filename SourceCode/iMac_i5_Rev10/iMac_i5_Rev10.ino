@@ -1994,7 +1994,7 @@ void readInputSetFanPWM() {
     
     // Slow fans down slowely, rather than hard off.
     // increasing PWM duty, lowers the voltage
-    currentPWM[0] = currentPWM[0]<=(255-factor) ? currentPWM[0]+factor : 255;
+    currentPWM[0] = currentPWM[0]<=(60-factor) ? currentPWM[0]+factor : 60;
     
   } else if ( currentFanValue < targetFanValue[0] ) {
     
