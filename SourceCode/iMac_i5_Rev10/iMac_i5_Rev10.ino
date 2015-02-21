@@ -198,7 +198,7 @@ const byte FAN_RPM_PIN[] = { 0, 1 };
 #ifdef LEGACY-RPM
 
 // Time between controlling the Fans
-#define FAN_CONTROL_PERIOD 1000
+#define FAN_CONTROL_PERIOD 5000
 
 #else
 
@@ -304,7 +304,7 @@ const int FAN_CONTROL_PWM_PRESCALE[] = { 256, 256, 256 };
 
 // Values in RPM
 #define OFF_FAN_VALUE 0
-#define MIN_FAN_VALUE 900
+#define MIN_FAN_VALUE 1200
 #define MAX_FAN_VALUE 4000
 
 // -------------------- TEMPS 
@@ -2090,8 +2090,6 @@ byte compareCurrentAndTarget(int current, int target) {
   
   if (percent<5) {
     return 0;
-  } else if (percent <10) {
-    return 1;
   } else if (percent <20) {
     return 1;
   } else if (percent <30) {
