@@ -1190,11 +1190,11 @@ void activateTempFanControl() {
   } else {
    
     // setup a timer - To Read Temperature
-    tempFanControlTimer = timer.setInterval(TEMPERATURE_SAMPLE_PERIOD,readTempSetTargetVolt);
+    tempFanControlTimer = timer.setInterval(TEMPERATURE_SAMPLE_PERIOD,readTempSetTarget);
   }
   
   // set initial voltage
-  readTempSetTargetVolt();
+  readTempSetTarget();
 }
 
 /**
@@ -1250,7 +1250,7 @@ void processCommandFan(String subCmd, String extraCmd) {
 
 #endif
 
-void readTempSetTargetVolt() {
+void readTempSetTarget() {
  
   // read the current temperature
   float tempAboveAmbient = getTempDiff();
@@ -1283,55 +1283,6 @@ float computeTempFactor( float temp ) {
 }
 
 // PRIVATE ------------------- MONITORING INFO
-
-#ifdef COMMANDABLE
-
-/*
-
-void printFanDetails() {
-    Serial.print(getAmbientTemp());
-    Serial.print(F("\t"));
-    Serial.print(getTempDiff());
-    Serial.print(F("\t"));
-    Serial.print(getFanControlTarget(0));
-    Serial.print(F("\t"));
-    Serial.print(getFanRPM(0));
-    Serial.print(F("\t"));
-    Serial.print(getFanRPM(1));
-    Serial.print(F("\t"));
-    Serial.print(getCurrentPWM(0)); // Current PWM
-    Serial.println(); 
-}
-
-int tempFanMonitorTimer = -1;
-
-// Activate the controller, and set the fan speed based on Temperature
-void activateTempFanMonitor() {
-  
-  if ( tempFanMonitorTimer == -1 ) { 
-    
-    // setup a timer that runs every 500 ms - To Read Temperature
-    tempFanMonitorTimer = timer.setInterval(3000,printFanDetails);
-  }
-
-  //getFanRPM(0);
-  //getFanRPM(1);
-  //getFanRPM(2);
-
-  // make sure the Timer Thread is active
-  timer.enable(tempFanMonitorTimer);    
-}
-
-// Deactive the controller, and turn the fans off
-void deactivateTempFanMonitor() {
-
-  // disable the timer if it exists
-  if (tempFanMonitorTimer >=0 ) timer.disable(tempFanMonitorTimer);  
-}
-
-*/
-
-#endif
 
 //
 // =======
@@ -2564,8 +2515,17 @@ void processCommandSystem(String subCmd, String extraCmd) {
     printTime((millis()-millsOfLastStartup)/1000L);
     Serial.println();
     
+  } else if (subCmd.equals("T")) {
+
+    Serial.print(F("Ambient    "));
+    Serial.print(getAmbientTemp());
+    Serial.println(F(" deg C"));
+    Serial.print(F("Difference "));
+    Serial.print(getTempDiff());
+    Serial.println(F(" deg C"));
+    
   } else {
-    Serial.println(F("System Command Unknown: S (stats), U (uptime)"));
+    Serial.println(F("System Command Unknown: S (stats), T (temps), U (uptime)"));
   }
 }
 
