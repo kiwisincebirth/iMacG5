@@ -25,8 +25,8 @@ __asm volatile ("nop");
  */
 
 //#define DEBUG // enables debig mode
-#define LEGACYBOARD // supports the legacy fan control LM317, proto board  
-#define LEGACY-RPM // Legacy Controlled by RPM Inputs, not LM317
+//#define LEGACYBOARD // supports the legacy fan control LM317, proto board  
+//#define LEGACY-RPM // Legacy Controlled by RPM Inputs, not LM317
 #define COMMANDABLE // has all commands not just brightness
 //#define CAPACITIVE // support for cap touch sensors
 #define TEMPERATURE // temperature intput for fans
@@ -257,7 +257,9 @@ const int FAN_CONTROL_PWM_PRESCALE[] = {1};
 #else
 
 //
+//
 // MODERN PINS
+//
 //
 
 // -------------- POWER DETECTION CONTROL
