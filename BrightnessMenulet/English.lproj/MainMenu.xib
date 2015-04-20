@@ -57,8 +57,8 @@
         </customObject>
         <slider horizontalHuggingPriority="750" id="463" userLabel="slider">
             <rect key="frame" x="0.0" y="0.0" width="21" height="103"/>
-            <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
-            <sliderCell key="cell" continuous="YES" state="on" maxValue="100" doubleValue="48.280297256097562" tickMarkPosition="left" sliderType="linear" id="464"/>
+            <autoresizingMask key="autoresizingMask" flexibleMinX="YES" flexibleMaxX="YES" flexibleMinY="YES" flexibleMaxY="YES"/>
+            <sliderCell key="cell" continuous="YES" maxValue="100" doubleValue="51.167111280487809" tickMarkPosition="left" sliderType="linear" id="464"/>
             <connections>
                 <action selector="sliderChanged:" target="454" id="473"/>
             </connections>

@@ -184,11 +184,12 @@
     NSLog(@"menuNeedsUpdate shoudHideSecretMenu = %d", shoudHideSecretMenu);
     
     // get the menu items
+    NSMenuItem *sliderMenuItem = [statusMenu itemAtIndex:0];
     NSMenuItem *seperatorMenuItem = [statusMenu itemAtIndex:1];
     NSMenuItem *readingsMenuItem = [statusMenu itemAtIndex:2];
     NSMenuItem *prefsMenuItem = [statusMenu itemAtIndex:3];
     NSMenuItem *quitMenuItem = [statusMenu itemAtIndex:4];
-    
+                             
     // hide the menu items
     [seperatorMenuItem setHidden:shoudHideSecretMenu];
     [readingsMenuItem setHidden:shoudHideSecretMenu]; 
