@@ -1867,11 +1867,13 @@ void processCommandBrightness(String subCmd, String extraCmd) {
   } else if (subCmd.equals("A")) {
     // Activate Inverter
     activateInverter();
+    deactivateFrontPanelLED();
     Serial.println("OK");
     
   } else if (subCmd.equals("D")) {
     // Deactivate Inverter
     deactivateInverter();
+    activateFrontPanelLED();
     Serial.println("OK");
     
   } else {
@@ -2198,6 +2200,10 @@ void deactivateFrontPanelLED() {
   setFrontPanelLEDBright(0);
 }
 
+void activateFrontPanelLED() {
+  setFrontPanelLEDBright(255);
+}
+
 void activateFrontPanelLEDBreath() {
   setFrontPanelLEDEffect(LEDMODE_BREATH,0L);
 }
@@ -2217,7 +2223,7 @@ void activateFrontPanelFlash(byte count) {
 }
 
 /**
- * Sets the brightness 0 - 1 of front panel LED
+ * Sets the brightness 0 - 255 of front panel LED
  */
 void setFrontPanelLEDBright(byte value) {
   initLEDBrightness();
@@ -2230,8 +2236,8 @@ void setFrontPanelLEDBright(byte value) {
 unsigned long ledEffectStartTime = 0; // when did the effect start
 unsigned long ledEffectDuration = 0; // is there a duration of the effect (fade)
 
-float ledBase=0; // the minimum LED value
-float ledFactor=255; // the maximum (multiplier)
+float ledBase=0; // the minimum LED value, copied from eeprom
+float ledFactor=255; // the maximum (multiplier), copied from eeprom
 
 void setFrontPanelLEDEffect(byte mode, unsigned long duration) {
   initLEDBrightness();
@@ -2311,6 +2317,7 @@ byte floatToPWMWithOffset( float value ) {
 // current ACTUAL PWM brightness, used for smoothing
 int actualLEDBright = 0; 
 
+// value between 0 and 255
 void setActualLEDBrightWithDamping( int value ) {
   
   // delta of 25 every 10ms gives 100ms (1/10 second) from off to on
@@ -2327,6 +2334,7 @@ void setActualLEDBrightWithDamping( int value ) {
   setActualLEDBright( actualLEDBright + delta );
 }
 
+// value betweeen 0 and 255
 void setActualLEDBright( int value ) {
   // this is where we convert float to PWM
   actualLEDBright = value;
