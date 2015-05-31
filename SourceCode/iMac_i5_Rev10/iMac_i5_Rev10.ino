@@ -119,6 +119,8 @@ __asm volatile ("nop");
 #define COLON ':'
 #define EQUALS '='
 #define ZERO '0'
+#define DEGC " degC"
+#define RPM " RPM"
 
 //
 // ================
@@ -130,13 +132,13 @@ __asm volatile ("nop");
 // 1.1 - 31/01/2015 - Added addition ifdefs to reduce size of bnary.
 // 1.2 - 15/02/2015 - Started to add support for RPM Fan Control
 // 1.3 - 19/04/2015 - Added Support for Mac Testers Slider App, Temps, 115200, OK
+// 1.4 - 331/6/2015 - Added final support for MacTesters Slider App
 //
 // --------------
 // Future Futures
 // --------------
 // Better Capacitance Calibration Routines, that ask user to touch sensor, then measure
 // If brightness change by Capacatance report report back to the app, so slider can moved
-// System State command SS - FSM State, Power, Inverter, etc
 //
 
 //
@@ -2459,10 +2461,7 @@ void processCommand(String cmd) {
   String secondCmd = cmd.substring(1,2);
   String extraCmd = cmd.substring(2);
 
-  if (cmd.equals("MP")) {
-    initiateTimedChime(0); // Play Chime
-    
-  } else if (firstCmd.equals("B")) {
+  if (firstCmd.equals("B")) {
     processCommandBrightness(secondCmd,extraCmd);
     
 #ifdef COMMANDABLE
@@ -2479,9 +2478,21 @@ void processCommand(String cmd) {
   } else if (firstCmd.equals("S")) {
     processCommandSystem(secondCmd,extraCmd);
 
-  } else {
-    Serial.println(F("Command Unknown: B (brighness), C (capacitive), E (eeprom), F (fans), S (system)"));
+  } else if (firstCmd.equals("L")) {
+    processCommandLed(secondCmd,extraCmd);
+
+  } else if (firstCmd.equals("M")) {
+    processCommandMelody(secondCmd,extraCmd);
     
+  } else if (firstCmd.equals("D")) {
+    Serial.println(F("Servo control not supported."));
+
+  } else {
+    #ifdef CAPACITIVE
+    Serial.println(F("Commands: B (Brighness), C (Capacitive), E (EEPROM), F (Fans), L (LED), S (system)"));
+    #else
+    Serial.println(F("Commands: B (Brighness), E (EEPROM), F (Fans), L (LED), S (system)"));
+    #endif
 #endif    
 
   }
@@ -2490,14 +2501,34 @@ void processCommand(String cmd) {
 
 #ifdef COMMANDABLE
 
+void processCommandLed(String subCmd, String extraCmd) {
+  
+  if (subCmd.equals("T")) { 
+    activateFrontPanelFlash(5);
+    Serial.println(F("LED test in progress"));
+    
+  } else {  
+    Serial.println(F("LED Command Unknown: T (test)"));
+  }
+}
+
+void processCommandMelody(String subCmd, String extraCmd) {
+  
+  if (subCmd.equals("P")) { 
+    initiateTimedChime(0); // Play Chime
+    Serial.println(F("Melody test in progress"));
+    
+  } else {  
+    Serial.println(F("Melody Command Unknown: P (Play)"));
+  }
+}
+
 void processCommandSystem(String subCmd, String extraCmd) {
   
   if (subCmd.equals("S")) {
     
     flushPSUActiviation(); // Flushes PSU Time to EEPROM
     flushLCDActiviation();
-    
-    Serial.println();
     
     Serial.print("SMC Power Cycles ");
     Serial.println(eepromRead(EEP_CYC_SMC));
@@ -2519,11 +2550,8 @@ void processCommandSystem(String subCmd, String extraCmd) {
     Serial.print(F("LCD     Hours "));
     printHours(eepromRead(EEP_TIM_LCD));
     Serial.println();
-
     
   } else if (subCmd.equals("U")) {
-    
-    Serial.println();
     
     // System Timers in-use
     Serial.print(F("Threads used "));
@@ -2543,6 +2571,25 @@ void processCommandSystem(String subCmd, String extraCmd) {
     printTime((millis()-millsOfLastStartup)/1000L);
     Serial.println();
     
+  } else if (subCmd.equals("T")) {
+
+    // TEMPERATURE
+    Serial.print(F("Ambient:   "));
+    Serial.print(getTemp1());
+    Serial.println(DEGC);
+
+    Serial.print(F("Internal:  "));
+    Serial.print(getTemp2());
+    Serial.println(DEGC);
+    
+    Serial.print(F("Fan 1:  "));
+    Serial.print(getFanRPM(0));
+    Serial.println(RPM);
+
+    Serial.print(F("Fan 2:  "));
+    Serial.print(getFanRPM(1));
+    Serial.println(RPM);
+
   } else {
     Serial.println(F("System Command Unknown: S (stats), U (uptime)"));
   }
