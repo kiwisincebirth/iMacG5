@@ -119,7 +119,7 @@ __asm volatile ("nop");
 #define COLON ':'
 #define EQUALS '='
 #define ZERO '0'
-#define DEGC " degC"
+#define DEGC " °C" // DEGC " degC"
 #define RPM " RPM"
 
 //

@@ -451,7 +451,7 @@
     // read result from serial port, until receive \ or timeout
     char bufr[1024];
     serialport_read_until(serialHandle, bufr, '\f', 1024, 100);
-    NSString *val1 = [NSString stringWithCString:bufr encoding:NSASCIIStringEncoding];
+    NSString *val1 = [NSString stringWithCString:bufr encoding:NSUTF8StringEncoding];
     [terminalAnswerTextView setString:val1];  //display the answer from the Arduino
     NSLog(@"Terminal Message received: %s",bufr);
 }
