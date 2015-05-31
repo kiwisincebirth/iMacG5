@@ -4,9 +4,7 @@
 @interface AppController : NSApplication {
     
     // Declare global variables
-  //NSTimer *timer = [NSTimer scheduledTimerWithTimeInterval: 2.0f target:self selector:@selector(timerClock:) userInfo:nil repeats: YES];
-   
-    
+      
     double arduinoBright;
     
     int fan1Rpm;
@@ -55,10 +53,8 @@
     IBOutlet NSTextField *ArduinoPortTextField;
     
     IBOutlet NSTextField *terminalTextField;
-    IBOutlet NSTextField *terminalAnswerTextField;
-}
-
-//@property (retain) IBOutlet NSTextField *terminalTextField;
+    IBOutlet NSTextView *terminalAnswerTextView;
+   }
 
 // called when the menu is clicked on
 - (void)menuNeedsUpdate:(NSMenu *)menu;
@@ -75,11 +71,26 @@
 // called when the Exit menu is clicked on
 - (IBAction)exitClicked:(id)sender;
 
+// called when the Port Scan Button is clicked on
+- (IBAction)portScanClicked:(id)sender;
+
+// called when the Uptime Button is clicked on
+- (IBAction)systemUptimeClicked:(id)sender;
+
+// called when the Temperature Button is clicked on
+- (IBAction)sysytemTemperatureClicked:(id)sender;
+
+// called when the Statistics Button is clicked on
+- (IBAction)systemStatisticsClicked:(id)sender;
+
 // called when the Chime Test Button is clicked on
 - (IBAction)chimeTestClicked:(id)sender;
 
 // called when the Door Test Button is clicked on
 - (IBAction)doorTestClicked:(id)sender;
+
+// called when the LED Test Button is clicked on
+- (IBAction)ledTestClicked:(id)sender;
 
 // called when enter is pressed within the terminal commands text field
 - (IBAction)TerminalTextFieldEnter:(NSTextField *)sender;

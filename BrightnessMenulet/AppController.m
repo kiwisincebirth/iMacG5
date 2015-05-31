@@ -8,7 +8,7 @@
 
 @implementation AppController
 
-- (void) configure_Port {
+- (void) configurePort {
     
     //
     // configure Serial Ports
@@ -29,16 +29,9 @@
         if ([file rangeOfString:@"tty.usbmodem"].location != NSNotFound) {
             serialPort = [@"/dev/" stringByAppendingString:file];
             NSLog(@"FOUND Serial Port %@",serialPort);
-            //NSString *USB = [NSString stringWithFormat:@"%@",serialPort];  //p
-            //[ArduinoPortTextField setStringValue:USB];
             [ArduinoPortTextField setStringValue:serialPort]; // display the USB port in the preferences window
         }
     }
-    
-    //serialPort = @"/dev/tty.usbmodem411";
-    //serialPort = @"/dev/tty.usbmodem1421";
-    //serialPort = @"/dev/tty.usbmodem14411";
-    //serialPort = @"/dev/tty.usbmodem1411";
     //serialPort = @"/dev/tty.usbmodem1d151"; //G4 Cube
     //serialPort = @"/dev/tty.usbmodem14331"; //HemiMac
 }
@@ -54,7 +47,7 @@
     NSLog(@"Hello from Brightness");
     
     // Configure Serial Ports
-    [self configure_Port];
+    [self configurePort];
     
 	//Create the NSStatusBar and set its length
 	statusItem = [[[NSStatusBar systemStatusBar] statusItemWithLength:NSSquareStatusItemLength] retain];
@@ -79,40 +72,39 @@
     // need a delegate for the menu
     [statusMenu setDelegate:(id)self];
     
-    //
-    // Creates Thread that controls shutting off inverter
-    //
-    // [NSThread detachNewThreadSelector:@selector(bgThread:) toTarget:self withObject:nil];
-    
     // register for SCREEN sleep notification
     [[[NSWorkspace sharedWorkspace] notificationCenter] addObserver:self selector:@selector(receiveScreenSleepNotification:) name:NSWorkspaceScreensDidSleepNotification object:NULL];
     
     // register for SCREEN wake notification
     [[[NSWorkspace sharedWorkspace] notificationCenter] addObserver:self selector:@selector(receiveScreenWakeNotification:) name:NSWorkspaceScreensDidWakeNotification object:NULL];
-
+/*
     // register for SYSTEM sleep notification
     [[[NSWorkspace sharedWorkspace] notificationCenter] addObserver:self selector:@selector(receiveSleepNotification:) name:NSWorkspaceWillSleepNotification object:NULL];
     
     // register for SYSTEM wake notification
     [[[NSWorkspace sharedWorkspace] notificationCenter] addObserver:self selector:@selector(receiveWakeNotification:) name:NSWorkspaceDidWakeNotification object:NULL];
-
-    // startup get initial brightness by loading from the Arduino
-	double initialBright = [self get_brightness];
-    
+*/
     // make sure inverter is active
-    [self activate_inverter];
+    [self activateInverter];
+    
+    // delay 0.3s (time for sensing the serial data)
+    NSDate *future = [NSDate dateWithTimeIntervalSinceNow: 0.3 ];
+    [NSThread sleepUntilDate:future];
+    
+    // startup get initial brightness by loading from the Arduino
+	arduinoBright = [self getBrightness];
     
     // set tooltips to indicate the current brightness
-    [self set_tooltips:initialBright];
+    [self setTooltips:arduinoBright];
 
     // set the slider to correct position
-    [(id)brightnessSlider setDoubleValue:initialBright];
+    [(id)brightnessSlider setDoubleValue:arduinoBright];
     
 	//Enables highlighting
 	[statusItem setHighlightMode:YES];
 	
     // not sure
-	[(id)brightnessSlider becomeFirstResponder];
+	//[(id)brightnessSlider becomeFirstResponder];
     
     // enable 2s interval timer
     [self intervalTimer];
@@ -121,56 +113,54 @@
 
 - (void)receiveScreenSleepNotification:(NSNotification *)notification
 {
-    NSLog(@"got Screen sleep notification");
+    NSLog(@"Got Screen Sleep Notification");
 
-    // deactivae the inverter
-    [self deactivate_inverter];
+    // deactivate the inverter
+    [self deactivateInverter];
+    
+    // close readings window (important, because the serial port will be closed after 1s)
+    [ReadingsWindow close];
+    
+    // delay 1s (time for sending the serial data)
+    NSDate *future = [NSDate dateWithTimeIntervalSinceNow: 1.0 ];
+    [NSThread sleepUntilDate:future];
     
     // close serial port
+    NSLog(@"Arduino serial port closed");
     serialHandle = serialport_close(serialHandle);
 }
 
 
 - (void)receiveScreenWakeNotification:(NSNotification *)notification
 {
-    NSLog(@"got Screen wake notification");
-
-    // Configure Serial Ports ***
-    [self configure_Port];
+    NSLog(@"Got Screen Wake Notification");
     
-    // activae the inverter
-    [self activate_inverter];
+    // delay 2s (for USB initialization)
+    NSDate *future = [NSDate dateWithTimeIntervalSinceNow: 2.0 ];
+    [NSThread sleepUntilDate:future];
+    
+    // then activate the inverter
+    [self activateInverter];
 }
 
-
+/*
 - (void)receiveSleepNotification:(NSNotification *)notification
 {
-    NSLog(@"got System Sleep notification");
-    
-    // deactivate the inverter
-    //[self deactivate_inverter];
+    NSLog(@"got system sleep notification - no action");
 }
 
 
 - (void)receiveWakeNotification:(NSNotification *)notification
 {
-    NSLog(@"got System Wake notification");
-    
-    // close serial port
-    //serialHandle = serialport_close(serialHandle);
-    
-    //sleep(1); // is important. Otherwise the serial command can not be sent to the Arduino after system wake.
-    
-    // activate the inverter
-    //[self activate_inverter];
+    NSLog(@"got system wake notification - no action");
 }
-
+*/
 
 - (void) menuNeedsUpdate: (NSMenu *)menu
 {
     //
     // Called before the menu is displayed, after it is clicked
-    // This is used to enable hidden menu items when holding down Option key
+    // This is used to enable hidden menu items when holding down Option (Alt) Key
     //
     
     // loads keyboard flags
@@ -184,52 +174,38 @@
     NSLog(@"menuNeedsUpdate shoudHideSecretMenu = %d", shoudHideSecretMenu);
     
     // get the menu items
-    NSMenuItem *sliderMenuItem = [statusMenu itemAtIndex:0];
     NSMenuItem *seperatorMenuItem = [statusMenu itemAtIndex:1];
     NSMenuItem *readingsMenuItem = [statusMenu itemAtIndex:2];
     NSMenuItem *prefsMenuItem = [statusMenu itemAtIndex:3];
     NSMenuItem *quitMenuItem = [statusMenu itemAtIndex:4];
-                             
+    
     // hide the menu items
     [seperatorMenuItem setHidden:shoudHideSecretMenu];
-    [readingsMenuItem setHidden:shoudHideSecretMenu]; 
+    [readingsMenuItem setHidden:shoudHideSecretMenu];
     [prefsMenuItem setHidden:shoudHideSecretMenu];
     [quitMenuItem setHidden:shoudHideSecretMenu];
     
     // set slider & tooltips to indicate the current brightness
     // (important, if the brightness was adjusted with the touch sensors)
-	arduinoBright = [self get_brightness]; // get current brightness by loading from the Arduino
+	arduinoBright = [self getBrightness]; // get current brightness by loading from the Arduino
     
-    [self get_rpm]; // get current RPM and temperature readings by loading from the Arduino
-    
-    [self set_tooltips:arduinoBright];            // set tooltips to indicate the current brightness
+    [self setTooltips:arduinoBright];            // set tooltips to indicate the current brightness
    
     [(id)brightnessSlider setDoubleValue:arduinoBright];      // set the slider to correct position
-}
-
-
-- (void)menuWillOpen:(NSMenu *)menu {
-    
-    //double arduinoBright = [self get_brightness];
-    //NSLog(@"Menu Will Open Brightness %f",arduinoBright);
-    
 }
 
 
 - (void)menuDidClose:(NSMenu *)menu {
     
     //
-    // called after menu closes, thus we close any serial port connection
+    // called after menu closes
     //
     
-    // close serial port
-    // serialHandle = serialport_close(serialHandle);
+    NSLog(@"Menu did close - No Action");
     
-    NSLog(@"Menu did close");
+    //arduinoBright = [self getBrightness];
     
-    arduinoBright = [self get_brightness];
-    
-    [self get_rpm]; // get current RPM and temperature readings by loading from the Arduino
+    //[self getRpm]; // get current RPM and temperature readings by loading from the Arduino
     }
 
 
@@ -244,12 +220,12 @@
 	int brightness = [sender doubleValue];
     
     // set Arduino Brightness and tooltips with current brightness
-    [self set_brightness:brightness];
-    [self set_tooltips:brightness];
+    [self setBrightness:brightness];
+    [self setTooltips:brightness];
 }
 
 
-- (double) get_brightness {
+- (double) getBrightness {
 	
     //
     // Get Brightness from the Arduino
@@ -258,12 +234,12 @@
     // make sure serial port open
     if (serialHandle<=0) serialHandle= serialport_init([serialPort UTF8String], serialBaud);
 
-    // The command we send to the Serial port "F" Fan "R" Read
-    char buf[] = {"BR\n"};
+    // The command we send to the Serial port "B" Brightness "R" Read
+    char buf[32] = {"BR\n"};
     serialport_write(serialHandle, buf);
 
     // read result from serial port, until receive \n
-    serialport_read_until(serialHandle, buf, '\n', 32, 1000);
+    serialport_read_until(serialHandle, buf, '\n', 30, 1000);
     
     // convert the value in the buffer to 7bit ASCII
     NSString *val = [NSString stringWithCString:buf encoding:NSASCIIStringEncoding];
@@ -273,7 +249,7 @@
     }
 
 
-- (void) get_rpm {
+- (void) getRpm {
     
     //
     // Get fan RPM and temperature sensor readings from the Arduino
@@ -283,26 +259,26 @@
     if (serialHandle<=0) serialHandle= serialport_init([serialPort UTF8String], serialBaud);
     
     // The command we send to the Serial port "F" Fan "R" Read
-    char buf[] = {"FR\n"};
+    char buf[32] = {"FR\n"};
     serialport_write(serialHandle, buf);
    
     // read result from serial port until receive ; or \n, then convert the value in the buffer to 7bit ASCII
-    serialport_read_until(serialHandle, buf, ';', 32, 1000);
+    serialport_read_until(serialHandle, buf, ';', 30, 100);
     NSString *val1 = [NSString stringWithCString:buf encoding:NSASCIIStringEncoding];
     
-    serialport_read_until(serialHandle, buf, ';', 32, 1000);
+    serialport_read_until(serialHandle, buf, ';', 30, 100);
     NSString *val2 = [NSString stringWithCString:buf encoding:NSASCIIStringEncoding];
     
-    serialport_read_until(serialHandle, buf, ';', 32, 1000);
+    serialport_read_until(serialHandle, buf, ';', 30, 100);
     NSString *val3 = [NSString stringWithCString:buf encoding:NSASCIIStringEncoding];
     
-    serialport_read_until(serialHandle, buf, ';', 32, 1000);
+    serialport_read_until(serialHandle, buf, ';', 30, 100);
     NSString *val4 = [NSString stringWithCString:buf encoding:NSASCIIStringEncoding];
     
-    serialport_read_until(serialHandle, buf, ';', 32, 1000);
+    serialport_read_until(serialHandle, buf, ';', 30, 100);
     NSString *val5 = [NSString stringWithCString:buf encoding:NSASCIIStringEncoding];
     
-    serialport_read_until(serialHandle, buf, '\n', 32, 1000);
+    serialport_read_until(serialHandle, buf, '\n', 30, 100);
     NSString *val6 = [NSString stringWithCString:buf encoding:NSASCIIStringEncoding];
     
     fan1Rpm = [val1 doubleValue];
@@ -329,17 +305,17 @@
 }
 
 
-- (void) set_tooltips:(double) new_brightness {
+- (void) setTooltips:(double) newBrightness {
 
     //
     // set tool tip with brightness
     //
     
-    [statusItem setToolTip:[NSString stringWithFormat:@"Brightness %1.0f%%",new_brightness]];
+    [statusItem setToolTip:[NSString stringWithFormat:@"Brightness %1.0f%%",newBrightness]];
 }
 
 
-- (void) set_brightness:(double) new_brightness {
+- (void) setBrightness:(double) newBrightness {
 
     //
     // set the brightness into the Arduino by sendig serial command (in accordance with slider position)
@@ -349,8 +325,8 @@
     if (serialHandle<=0) serialHandle= serialport_init([serialPort UTF8String], serialBaud);
 
     // init a buffer with command "B" Brightness "W" Write, followed by brightness number and the \n
-    char buf[8];
-    sprintf(buf, "BW%1.0f\n", new_brightness);
+    char buf[32];
+    sprintf(buf, "BW%1.0f\n", newBrightness);
     
     // send the command via serial port
     serialport_write(serialHandle, buf);
@@ -367,7 +343,7 @@
     if (serialHandle<=0) serialHandle= serialport_init([serialPort UTF8String], serialBaud);{
         
         // The command we send to the Serial port "B" Brihgtness "+" Up
-        char buf[] = {"B+\n"};
+        char buf[32] = {"B+\n"};
         serialport_write(serialHandle, buf);
         
         NSLog( @"Brightness Increased");
@@ -385,7 +361,7 @@
     if (serialHandle<=0) serialHandle= serialport_init([serialPort UTF8String], serialBaud);{
         
         // The command we send to the Serial port "B" Brightness "-" Down
-        char buf[] = {"B-\n"};
+        char buf[32] = {"B-\n"};
         serialport_write(serialHandle, buf);
         
         NSLog( @"Brightness Decreased");
@@ -393,7 +369,7 @@
 }
 
 
-- (void) activate_inverter {
+- (void) activateInverter {
 	
     //
     // Activate Inverter on Arduino
@@ -407,11 +383,11 @@
         if (serialHandle<=0) serialHandle= serialport_init([serialPort UTF8String], serialBaud);
     
         // The command we send to the Serial port "B" Brightness "A" Activate
-        char buf[] = {"BA\n"};
+        char buf[32] = {"BA\n"};
         serialport_write(serialHandle, buf);
         loop = loop + 1;
         
-        // read result from serial port, until receive \r
+        // read result from serial port, until receive \n
         serialport_read_until(serialHandle, buf, '\n', 4, 500);
         
         // Then Check for a Message "OK"
@@ -421,17 +397,15 @@
         }
         // Timeout after 10 loops!
         if (loop >= 10) {
-            NSLog( @"Serial Communication Timeout!");
+            NSLog( @"Serial Communication Timeout (BA)");
             confirmed = true;
         }
     }
- 
-    
     NSLog( @"Inverter Activated");
 }
 
 
-- (void) deactivate_inverter {
+- (void) deactivateInverter {
     
     //
     // De-Activate Inverter on Arduino
@@ -446,11 +420,11 @@
         if (serialHandle<=0) serialHandle= serialport_init([serialPort UTF8String], serialBaud);
         
         // The command we send the the Serial port "B" Brightness "D" Deactivate
-        char buf[] = {"BD\n"};
+        char buf[32] = {"BD\n"};
         serialport_write(serialHandle, buf);
         loop = loop + 1;
     
-        // read result from serial port, until receive \r
+        // read result from serial port, until receive \n
         serialport_read_until(serialHandle, buf, '\n', 4, 500);
         
         // Then Check for a Message "OK"
@@ -460,13 +434,26 @@
         }
         // Timeout after 10 loops!
         if (loop >= 10) {
-            NSLog( @"Serial Communication Timeout!");
+            NSLog( @"Serial Communication Timeout (BD)");
             confirmed = true;
         }
     }
-
     NSLog( @"Inverter De-Activated");
+}
+
+
+- (void) receiveTerminalAnswer {
     
+    //
+    // Receive the terminal answer from the Arduino
+    //
+    
+    // read result from serial port, until receive \ or timeout
+    char bufr[1024];
+    serialport_read_until(serialHandle, bufr, '\f', 1024, 100);
+    NSString *val1 = [NSString stringWithCString:bufr encoding:NSASCIIStringEncoding];
+    [terminalAnswerTextView setString:val1];  //display the answer from the Arduino
+    NSLog(@"Terminal Message received: %s",bufr);
 }
 
 - (void) intervalTimer {
@@ -474,14 +461,81 @@
     // 2s Interval Timer
     //
     if ([ReadingsWindow isVisible]) {
-        [self get_rpm]; // get current RPM and temperature readings by loading from the Arduino
-        NSLog( @"Readings refreshed");
+        [self getRpm]; // get current RPM and temperature readings by loading from the Arduino
+        //NSLog( @"Readings refreshed");
     }
 
     // loop this function every 2s in order to refresh the readings!
     dispatch_async(dispatch_get_main_queue(), ^{
         [NSTimer scheduledTimerWithTimeInterval:2.0f target:self selector:@selector(intervalTimer) userInfo:nil repeats:NO];
     });
+}
+
+
+- (IBAction)portScanClicked:(id)sender {
+    
+    //
+    // Port Scan Button
+    //
+    
+    [self configurePort];
+}
+
+- (IBAction)systemUptimeClicked:(id)sender {
+    
+    //
+    // Uptime Button
+    //
+    
+    // make sure serial port open
+    if (serialHandle<=0) serialHandle= serialport_init([serialPort UTF8String], serialBaud);{
+        
+        // The command we send to the Serial port "M" Melody "P" Play
+        char buf[32] = {"SU\n"};
+        serialport_write(serialHandle, buf);    }
+    NSLog( @"System Uptime");
+    
+    // receive answer from the Arduino
+    [self receiveTerminalAnswer];
+
+}
+
+
+- (IBAction)sysytemTemperatureClicked:(id)sender {
+    
+    //
+    // Temperature Button
+    //
+    
+    // make sure serial port open
+    if (serialHandle<=0) serialHandle= serialport_init([serialPort UTF8String], serialBaud);{
+        
+        // The command we send to the Serial port "M" Melody "P" Play
+        char buf[32] = {"ST\n"};
+        serialport_write(serialHandle, buf);    }
+    NSLog( @"System Temperature");
+    
+    // receive answer from the Arduino
+    [self receiveTerminalAnswer];
+}
+
+
+- (IBAction)systemStatisticsClicked:(id)sender {
+    
+    //
+    // Statistics Button
+    //
+    
+    // make sure serial port open
+    if (serialHandle<=0) serialHandle= serialport_init([serialPort UTF8String], serialBaud);{
+        
+        // The command we send to the Serial port "M" Melody "P" Play
+        char buf[32] = {"SS\n"};
+        serialport_write(serialHandle, buf);    }
+    NSLog( @"System Statistics");
+    
+    // receive answer from the Arduino
+    [self receiveTerminalAnswer];
 }
 
 
@@ -495,10 +549,14 @@
     if (serialHandle<=0) serialHandle= serialport_init([serialPort UTF8String], serialBaud);{
         
         // The command we send to the Serial port "M" Melody "P" Play
-        char buf[] = {"MP\n"};
+        char buf[32] = {"MP\n"};
         serialport_write(serialHandle, buf);    }
     NSLog( @"Chime Test");
+    
+    // receive answer from the Arduino
+    [self receiveTerminalAnswer];
 }
+
 
 - (IBAction)doorTestClicked:(id)sender {
     
@@ -510,36 +568,54 @@
     if (serialHandle<=0) serialHandle= serialport_init([serialPort UTF8String], serialBaud);{
         
         // The command we send to the Serial port "D" door "S" switch
-        char buf[] = {"DS\n"};
+        char buf[32] = {"DS\n"};
         serialport_write(serialHandle, buf);    }
     NSLog( @"Door Test");
+    
+    // receive answer from the Arduino
+    [self receiveTerminalAnswer];
 }
+
+- (IBAction)ledTestClicked:(id)sender {
+    
+    //
+    // Test LED
+    //
+    
+    // make sure serial port open
+    if (serialHandle<=0) serialHandle= serialport_init([serialPort UTF8String], serialBaud);{
+        
+        // The command we send to the Serial port "D" door "S" switch
+        char buf[32] = {"LT\n"};
+        serialport_write(serialHandle, buf);    }
+    NSLog( @"LED Test");
+    
+    // receive answer from the Arduino
+    [self receiveTerminalAnswer];
+}
+
 
 - (IBAction)TerminalTextFieldEnter:(NSTextField *)sender {
     
     //
-    // Terminal
+    // Terminal Command
     //
     
     // make sure serial port open
     if (serialHandle<=0) serialHandle= serialport_init([serialPort UTF8String], serialBaud);{
        
+        // send the command
         NSString *serialCommand = [terminalTextField stringValue];//read the text field
         const char *buffer = [serialCommand UTF8String];
-        char buf[128];
+        char buf[32];
         sprintf(buf, "%s\n", buffer);           //format the command
         serialport_write(serialHandle, buf);    //send the command
         NSLog(@"Terminal Message sent: %s",buf);
-    
-    
-        // read result from serial port, until receive \n or timeout
-        serialport_read_until(serialHandle, buf, '\n', 128, 500);
-        NSString *val1 = [NSString stringWithCString:buf encoding:NSASCIIStringEncoding];
-        [terminalAnswerTextField setStringValue:val1];  //display the answer from the Arduino
-        NSLog(@"Terminal Message received: %s",buf);
+        
+        // receive answer from the Arduino
+        [self receiveTerminalAnswer];
     }
 }
-
 
 
 - (IBAction)readingsClicked:(id)sender {
@@ -551,7 +627,10 @@
     NSLog(@"Readings from Brightness");
     [NSApp activateIgnoringOtherApps:YES];
     [ReadingsWindow makeKeyAndOrderFront:sender];
+    
+    [self getRpm];          // get current RPM and temperature readings by loading from the Arduino
 }
+
 
 - (IBAction)prefsClicked:(id)sender {
     
