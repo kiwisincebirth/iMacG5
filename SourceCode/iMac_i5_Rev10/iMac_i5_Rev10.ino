@@ -25,8 +25,8 @@ __asm volatile ("nop");
  */
 
 //#define DEBUG // enables debig mode
-#define LEGACYBOARD // supports the legacy fan control LM317 voltage, proto board  
-#define LEGACY-RPM // Legacy Controlled by RPM Inputs, not LM317 Voltage feedback
+//#define LEGACYBOARD // supports the legacy fan control LM317 voltage, proto board  
+//#define LEGACY-RPM // Legacy Controlled by RPM Inputs, not LM317 Voltage feedback
 #define COMMANDABLE // has all commands not just brightness
 //#define CAPACITIVE // support for cap touch sensors
 #define TEMPERATURE // temperature intput for fans
@@ -572,7 +572,7 @@ boolean isLocationException(byte location) {
 }
 
 boolean isProtectedException(byte location) {
-  return location <= 16;
+  return location < 16;
 }
 
 int inline eepromLocation(byte location) {
@@ -623,7 +623,7 @@ void eepromReadCommand(String extraCmd) {
   if (location>0 && !isLocationException(location) ) {
     eepromReadCommand(location);
   } else {
-    for (byte i = 16;i<sizeofEeprom();i++) {
+    for (byte i = 0;i<sizeofEeprom();i++) {
       eepromReadCommand(i);
     }
   }
@@ -1841,10 +1841,18 @@ byte setInverterPWMBrightness() {
     byte inverterMax = eepromRead(EEP_MAX_BRIGHT);
     int range = inverterMax - inverterMin;
     byte pwmValue = ( range * getInverterBright() / 100 ) + inverterMin;  
+    #ifdef LEGACYBOARD
     analogWrite(INVERTER_PWM,pwmValue);
+    #else
+    analogWrite(INVERTER_PWM,255-pwmValue);
+    #endif
     return pwmValue;
   } else {
+    #ifdef LEGACYBOARD
     analogWrite(INVERTER_PWM,0);
+    #else
+    analogWrite(INVERTER_PWM,255);
+    #endif
     return 0;
   }
 }
