@@ -215,17 +215,17 @@ const byte FAN_RPM_PIN[] = { 0, 1 };
 #define FAN_CONTROL_COUNT 1
 
 // PWM Fan Speed Voltage OUTPUT
-const byte FAN_CONTROL_PWM[] = { 9 } ;
+const byte FAN_CONTROL_PWM_PIN[] = { 9 } ;
 
 // Prescale Values for controlling PWM
-const int FAN_CONTROL_PWM_PRESCALE[] = {1};
+const long FAN_CONTROL_PWM_PRESCALE[] = {1};
 
 #ifdef LEGACY-RPM
 
 // Values in RPM
-#define OFF_FAN_VALUE 100
-#define MIN_FAN_VALUE 1200
-#define MAX_FAN_VALUE 5000
+#define OFF_FAN_VALUE 0
+#define MIN_FAN_VALUE 1000
+#define MAX_FAN_VALUE 4000
 
 #else
 
@@ -303,15 +303,15 @@ const byte FAN_RPM_PIN[] = { 1, 2, 7 };
 #define FAN_CONTROL_COUNT 3
 
 // Fan Control Outputs
-const byte FAN_CONTROL_PWM[] = { 9, 6, 10 } ;
+const byte FAN_CONTROL_PWM_PIN[] = { 9, 6, 10 } ;
 
 // Prescale Values for controlling PWM
-const int FAN_CONTROL_PWM_PRESCALE[] = { 256, 256, 256 };
+const int FAN_CONTROL_PWM_PRESCALE[] = { 1, 1, 1 };
 
-// Values in RPM
+// Values in Percentage 
 #define OFF_FAN_VALUE 0
-#define MIN_FAN_VALUE 1200
-#define MAX_FAN_VALUE 4000
+#define MIN_FAN_VALUE 10
+#define MAX_FAN_VALUE 100
 
 // -------------------- TEMPS 
 
@@ -381,6 +381,13 @@ const int FAN_CONTROL_PWM_PRESCALE[] = { 256, 256, 256 };
 #define EEP_FAN_CONTROL 31 // is the fan temp controller enabled  
 #define EEP_INVERTER_WARM_DELAY 32 // milliseconds before starting inverter 
 
+//#define EEP_BAS_FAN1_PWM 33 // PWM value for 1000 rpm for FAN 1 
+//#define EEP_INC_FAN1_PWM 34 // PWM 1000 RPM INC for FAN 1
+//#define EEP_BAS_FAN2_PWM 35 // PWM value for 1000 rpm for FAN 2 
+//#define EEP_INC_FAN2_PWM 36 // PWM 1000 RPM INC for FAN 2
+//#define EEP_BAS_FAN3_PWM 37 // PWM value for 1000 rpm for FAN 3 
+//#define EEP_INC_FAN3_PWM 38 // PWM 1000 RPM INC for FAN 3
+
 //
 // Names of Data stored in these locations
 //
@@ -423,6 +430,13 @@ const char PROGMEM string_16[] PROGMEM = "CapBrigEnabled";
 const char PROGMEM string_17[] PROGMEM = "FanTempEnabled"; 
 const char PROGMEM string_18[] PROGMEM = "InvertWarmDly"; 
 
+//const char PROGMEM string_19[] PROGMEM = "Base1000PWM1"; // redefined to be RPM Range for the Fans
+//const char PROGMEM string_20[] PROGMEM = "Inc-1000PWM1";
+//const char PROGMEM string_21[] PROGMEM = "Base1000PWM2"; // redefined to be RPM Range for the Fans
+//const char PROGMEM string_22[] PROGMEM = "Inc-1000PWM2";
+//const char PROGMEM string_23[] PROGMEM = "Base1000PWM3"; // redefined to be RPM Range for the Fans
+//const char PROGMEM string_24[] PROGMEM = "Inc-1000PWM3";
+
 //
 // the following must contain all strings from above
 //
@@ -433,7 +447,8 @@ PGM_P const eepName[] PROGMEM = {
   string_RES, string_RES, string_RES, string_RES, string_RES, string_RES, string_RES, string_RES, 
   string_02, string_03, string_04, string_05, string_06, string_07, 
   string_08, string_09, string_10, string_11, string_DEP, string_13, 
-  string_14, string_15, string_16, string_17, string_18 };
+  string_14, string_15, string_16, string_17, string_18 }; 
+//  string_19, string_20, string_21, string_22, string_23, string_24 };
 
 // 
 // ========================================
@@ -485,7 +500,7 @@ void checkEepromConfiguration() {
   byte currentHighest = eepromRead(EEP_VERSION);
   if ( currentHighest == 255 ) currentHighest = 0;
 
-  // All The Deefault Values
+  // All The Default Values
   if ( currentHighest < EEP_INVERTER_WARM_DELAY ) { 
     
     // write default values
@@ -509,8 +524,8 @@ void checkEepromConfiguration() {
     eepromWrite( EEP_BRIGHT_INC, 5 ); // Brightness Increme
     eepromWrite( EEP_MIN_TEMP, 0 ); // 100ths of a dreee e.g. 2000 = 20.0 degrees
     eepromWrite( EEP_MAX_TEMP, 2000 ); // 100ths of a dreee
-    eepromWrite( EEP_MIN_VOLT_RPM, 250 ); // 100ths of a volt e.g. 330 = 3.3V
-    eepromWrite( EEP_MAX_VOLT_RPM, 550 ); // 100ths of a volt
+    eepromWrite( EEP_MIN_VOLT_RPM, 1000 ); // 100ths of a volt e.g. 330 = 3.3V
+    eepromWrite( EEP_MAX_VOLT_RPM, 3000 ); // 100ths of a volt
     eepromWrite( EEP_DN_CAP_THR, 150 ); // Down Threashhold
     eepromWrite( EEP_UP_CAP_THR, 150 ); // Up Threashold
     eepromWrite( EEP_CAP_SAMPLE, 200 ); // Samples
@@ -525,6 +540,20 @@ void checkEepromConfiguration() {
     // and version number
     currentHighest = EEP_INVERTER_WARM_DELAY;
   } 
+
+//  // All The Default Values
+//  if ( currentHighest < EEP_INC_FAN3_PWM ) { 
+//    
+//    eepromWrite( EEP_BAS_FAN1_PWM, 50 ); // 100ths of a volt e.g. 330 = 3.3V
+//    eepromWrite( EEP_INC_FAN1_PWM, 100 ); // 100ths of a volt e.g. 330 = 3.3V
+//    eepromWrite( EEP_BAS_FAN2_PWM, 50 ); // 100ths of a volt e.g. 330 = 3.3V
+//    eepromWrite( EEP_INC_FAN2_PWM, 100 ); // 100ths of a volt e.g. 330 = 3.3V
+//    eepromWrite( EEP_BAS_FAN3_PWM, 50 ); // 100ths of a volt e.g. 330 = 3.3V
+//    eepromWrite( EEP_INC_FAN3_PWM, 1000 ); // 100ths of a volt e.g. 330 = 3.3V
+//
+//    // and version number
+//    currentHighest = EEP_INC_FAN3_PWM;
+//  } 
 
   // finally update eprom with Highest numbered item stored in EEPROM
   eepromWrite(EEP_VERSION,currentHighest);
@@ -747,6 +776,47 @@ void startupAndTransition() {
   // iMac G5 20 - KiwiSinceBirth - Startup
   fsm.transitionTo(STATE_ACTIVE);
 }
+
+/*
+void startupAndTransition() {
+
+  activatePSU(); // Ensure the ATX G5 PSU is active
+ 
+  for (int fan=1; fan<3 ;fan++ ) {
+    
+        Serial.println("");
+        Serial.print("FAN -- ");
+        Serial.println(fan);
+        Serial.println("");
+        
+        getFanRPM(fan);
+
+        analogWriteFanPWM(0,0);
+        analogWriteFanPWM(1,0);
+        analogWriteFanPWM(2,0);
+        
+        int from = fan==0 ? 100 : 10;
+        int to = fan==0 ? 45 : 1;
+        int dec = fan==0 ? 5 : 1;
+
+      for (int pwm=from; pwm>=to ;pwm=pwm-dec ) {
+
+        Serial.print("Fan ");
+        Serial.print(fan);
+        Serial.print(" PWM ");
+        Serial.print(pwm);
+
+        // write the PWM  
+        analogWriteFanPWM(fan,pwm);
+
+        delay(5000);      
+
+        Serial.print(" RPM ");
+        Serial.println(getFanRPM(fan));
+      } 
+  }
+}
+*/
 
 //
 // ACTIVE STATE
@@ -1242,7 +1312,7 @@ void processCommandFan(String subCmd, String extraCmd) {
     Serial.print(";");
     Serial.print(getFanRPM(1));
     Serial.print(";");
-    if (FAN_COUNT>2) Serial.print(getFanRPM(2)); else Serial.print(0);
+    Serial.print(getFanRPM(2)); 
     Serial.print(";");
     Serial.print(getTemp1());
     Serial.print(";");
@@ -1251,17 +1321,23 @@ void processCommandFan(String subCmd, String extraCmd) {
     Serial.println(getTemp3());
 
   } else if (subCmd.equals("M")) {
+    // disables and temp sets fans to ZERO.
     deactivateTempFanControl();
-    Serial.print(F("Fans Set To Max"));
     setFanContolTarget( MAX_FAN_VALUE );
+
+    Serial.print(F("Fans Set To Max"));
 
   } else if (subCmd.equals("L")) {
     // "LOG" - Starts Logging
     debugFans = true;
     
+    Serial.print(F("Debug Logging Started"));
+
   } else if (subCmd.equals("O")) {
     // "OFF" - Stops Logging
     debugFans = false;
+
+    Serial.print(F("Debug Logging Stopped"));
 
   } else {
     Serial.println(F("Fan Command Unknown: FM (max), FA (activate), FR (read), FD (deactivate), FL (log), FO (log off)"));
@@ -1277,17 +1353,20 @@ void readTempSetTarget() {
     
   // Computes the Factor 0 - 1 (with trig rounding) that the temp is on our MIN MAX Scale
   float tempFactor = computeTempFactor(tempAboveAmbient);
-    
-  float minValue = (float)eepromRead(EEP_MIN_VOLT_RPM);
-  float maxValue = (float)eepromRead(EEP_MAX_VOLT_RPM);
 
-  // compute the Target Voltage based on the temperature 
-  setFanContolTarget ( tempFactor * (maxValue - minValue) + minValue );
+//  float minValue = (float)eepromRead(EEP_MIN_VOLT_RPM);
+//  float maxValue = (float)eepromRead(EEP_MAX_VOLT_RPM);
+//
+//  // compute the Target Voltage based on the temperature 
+//  setFanContolTarget ( tempFactor * (maxValue - minValue) + minValue );
+
+  //
+  setFanContolTarget(tempFactor);
 }
 
 /**
- * Computes the Factor 0 - 1 that the temp is on our MIN MAX Scale
- * Function ensures temp is not outside correct fange 
+ * Computes the Factor 0 - 100% (support > 100) that the temp is on our MIN MAX Scale
+ * Function ensures temp is not outside correct range 
  */
 float computeTempFactor( float temp ) {
   
@@ -1295,9 +1374,9 @@ float computeTempFactor( float temp ) {
   float maxTemp = (float)eepromRead(EEP_MAX_TEMP) / 100.0f;
   
   if ( temp<=minTemp ) return 0.0f;
-  if ( temp>=maxTemp ) return 1.0f;
+//  if ( temp>=maxTemp ) return 1.0f;
   
-  float tempFactor = ( temp-minTemp ) / ( maxTemp-minTemp ); 
+  float tempFactor = ( temp-minTemp ) / ( maxTemp-minTemp ) * 100; 
   
   return computeTrigFactor(tempFactor);
 }
@@ -1372,7 +1451,7 @@ void calibrateSensorReading() { }
 // ----------
 //
 
-volatile long fanRotationCount[FAN_COUNT];
+volatile unsigned long fanRotationCount[FAN_COUNT];
 unsigned long fanTimeStart[FAN_COUNT];
 
 void interruptFan1() {
@@ -1388,34 +1467,46 @@ void interruptFan3() {
 }
 
 int getFanRPM( byte fan ) {
+  return 0;
+}
+
+/*
+int getFanRPM( byte fan ) {
   
   static boolean started = false;
   if (!started) {
     started = true;
     
     for ( byte fan=0; fan<FAN_COUNT; fan++ ) {
+      
+      fanRotationCount[fan] = 0;
+      fanTimeStart[fan] = millis();
+  
       // Start Up the RPM by setting PIN 
       pinMode(FAN_RPM_PIN[fan],INPUT_PULLUP);    
     }
     
     //and attaching interrupt
 #ifdef FAN1_INTERRUPT
-    attachInterrupt(FAN1_INTERRUPT,interruptFan1,FALLING);
+    attachInterrupt(FAN1_INTERRUPT,interruptFan1,RISING);
 #endif
 #ifdef FAN2_INTERRUPT
-    attachInterrupt(FAN2_INTERRUPT,interruptFan2,FALLING);
+    attachInterrupt(FAN2_INTERRUPT,interruptFan2,RISING);
 #endif
 #ifdef FAN3_INTERRUPT
-    attachInterrupt(FAN3_INTERRUPT,interruptFan3,FALLING);
+    attachInterrupt(FAN3_INTERRUPT,interruptFan3,RISING);
 #endif
   }
 
-  // pulses counted; /2 pulses per rotation; *60000 milliseconds per minute; /millis elapsed
-  double ret = fanRotationCount[fan] /2L *60000L / ( millis() - fanTimeStart[fan] );
-  fanRotationCount[fan] = 0;
+  // pulses counted; /2 pulses per rotation;  /millis elapsed; *60000 milliseconds per minute;
+  unsigned long elapsed = millis() - fanTimeStart[fan];
+//  Serial.println(fanRotationCount[fan]);
+  unsigned long ret = 30000L / elapsed * fanRotationCount[fan];
+  fanRotationCount[fan] = 0L;
   fanTimeStart[fan] = millis();
   return ret;
 }
+*/
 
 //
 // ----------
@@ -1896,15 +1987,47 @@ void processCommandBrightness(String subCmd, String extraCmd) {
 //
 
 // The output Fan RPM (or mVolts for LM317) we desire
-int targetFanValue[] = { MIN_FAN_VALUE, MIN_FAN_VALUE, MIN_FAN_VALUE }; 
+//int targetFanValue[] = { MIN_FAN_VALUE, MIN_FAN_VALUE, MIN_FAN_VALUE }; 
 
 // Set the Target Fan RPM (mVolt LM317) for a ALL Fans
 // This controls all Fans, setting them to the same value
-void setFanContolTarget(int value) {
-  for ( int fan=0; fan<FAN_COUNT; fan++ ) {
-    setFanContolTarget( fan, value );
+void setFanContolTarget(float value) {
+  
+  if (value<=1) {
+    
+    analogWriteFanPWM(0,0);
+    analogWriteFanPWM(1,0);
+    analogWriteFanPWM(2,0);
+    
+  } else {
+    
+    // Fan 0 => 45 - 95
+    analogWriteFanPWM(0,45+(value/2));
+  
+    byte pwm;
+    if (value<20) {
+      pwm = 1;
+    } else if (value < 50) {
+      pwm = 2;
+    } else if (value < 75) {
+      pwm = 3;
+    } else if (value < 100) {
+      pwm = 4;
+    } else { pwm = 5; }
+    
+    // Fan 1 2 => 1 - 5
+    analogWriteFanPWM(1,pwm);
+    analogWriteFanPWM(2,pwm);
+    
   }
+  
+//  for ( int fan=0; fan<FAN_COUNT; fan++ ) {
+//    setFanContolTarget( fan, value );
+//  }
+
 }
+
+/*
 
 // Set the Target Fan RPM ( cVolt LM317) for a specified Fan
 // this can be used for independant Fan Control.
@@ -1929,14 +2052,14 @@ void initFanController() {
   
   if (fanControlTimer>=0) return;
 
-  // set up the three PWM outputs
-  for ( byte fan=0; fan<FAN_CONTROL_COUNT; fan++ ) {
-    
-    digitalWrite(FAN_CONTROL_PWM[fan],HIGH); // ensures minimum voltage
-    pinMode(FAN_CONTROL_PWM[fan],OUTPUT);   // PWM Output Pin For Fan
-    setPWMPrescaler(FAN_CONTROL_PWM[fan],FAN_CONTROL_PWM_PRESCALE[fan]); // Sets 31.25KHz / 256 = 122Hz Frequency
-  }
-  
+//  // set up the three PWM outputs
+//  for ( byte fan=0; fan<FAN_CONTROL_COUNT; fan++ ) {
+//    
+//    digitalWrite(FAN_CONTROL_PWM_PIN[fan],HIGH); // ensures minimum voltage
+//    pinMode(FAN_CONTROL_PWM_PIN[fan],OUTPUT);   // PWM Output Pin For Fan
+//    setPWMPrescaler(FAN_CONTROL_PWM_PIN[fan],FAN_CONTROL_PWM_PRESCALE[fan]); // Sets 31.25KHz / 256 = 122Hz Frequency
+//  }
+
   // setup a timer that runs every 50 ms - To Set Fan Speed
   fanControlTimer = timer.setInterval(FAN_CONTROL_PERIOD,readInputSetFanPWM);
 }
@@ -2003,7 +2126,7 @@ void readInputSetFanPWM() {
 //  }
   
   // write the PWM  
-  analogWrite(FAN_CONTROL_PWM[0],currentPWM[0]);
+  analogWriteFanPWM(0,currentPWM[0]);
 }
 
 #else 
@@ -2022,61 +2145,62 @@ void readInputSetFanPWM() {
   for ( byte fan=0; fan<FAN_COUNT; fan++ ) {
 
     // target RPM if fans are not active
-    int currentFanValue = getFanRPM(fan);
+    // int currentFanValue = getFanRPM(fan);
   
     // what is a easonable amount to change PWM by
-    byte factor = compareCurrentAndTarget(currentFanValue,targetFanValue[fan]);
+    // byte factor = compareCurrentAndTarget(currentFanValue,targetFanValue[fan]);
   
-    // todo consider damping the Fan RPM Input by shortening the sample time of the fan
-    // relative to the last PWM adjustment, i.e. adjust every 2 seconds, but sample only last 1 second FAN RPM
-    // the point being that the fan takes time to adjust.
-    
-    // todo need to put a scope on this and measure
-    // VOLTAGE profile of the fan
-    // PWM signal coming off the Arduino.
-    // RPM of the Fan, pullup resistor, or could get arduino tom monitor it.
-    // Voltage of the control Signal.
-    
-    // todo sketch to control the fans as per this sketch with VIN (POT) to control RPM
-    // todo with full monitoring.
-    // Event just monitor RPM, and see what varianc we get from one second to the next. 
-  
-    if ( currentFanValue < targetFanValue[fan] ) {
+    //if ( currentFanValue < targetFanValue[fan] ) {
     
       // Slow fans down slowely, rather than hard off.
       // increasing PWM duty, lowers the voltage
-      currentPWM[fan] = currentPWM[fan]<(255-factor) ? currentPWM[fan]+factor : 255;
+    //  currentPWM[fan] = currentPWM[fan]<(255-factor) ? currentPWM[fan]+factor : 255;
     
-    } else if ( currentFanValue > targetFanValue[fan] ) {
+    //} else if ( currentFanValue > targetFanValue[fan] ) {
     
       // Slowly ramp up the fan speed, rather than hard on.
       // decreasing PWM duty, increases the voltage
-      currentPWM[fan] = currentPWM[fan]>factor ? currentPWM[fan]-factor : 0;
-    }
+    //  currentPWM[fan] = currentPWM[fan]>factor ? currentPWM[fan]-factor : 0;
+    //}
+
+    currentPWM[fan];
+    targetFanValue[fan];
   
     if ( debugFans ) {  
-      Serial.print(fan);
-      Serial.print(F("\t"));
-      Serial.print(currentFanValue);
-      Serial.print(F("\t"));
-      Serial.print(targetFanValue[fan]);
-      Serial.print(F("\t"));
-      Serial.print(factor);
-      Serial.print(F("\t"));
-      Serial.print(targetFanValue[fan]);
-      Serial.print(F("\t"));
-      Serial.print(currentPWM[fan]);
-      Serial.print(F("\t"));
-      Serial.println(); 
+//      Serial.print(fan);
+//      Serial.print(F("\t"));
+//      Serial.print(targetFanValue[fan]);
+//      Serial.print(F("\t"));
+//      Serial.print(currentPWM[fan]);
+//      Serial.print(F("\t"));
+//      Serial.println(); 
     }
   
     // write the PWM  
-    analogWrite(FAN_CONTROL_PWM[fan],currentPWM[fan]);
+    analogWriteFanPWM(fan,currentPWM[fan]);
   }
 }
 
 #endif
 
+*/
+
+// Basic Write operation for a Fan
+void analogWriteFanPWM( byte fan, byte pwm ) {
+
+  if (fan>=FAN_CONTROL_COUNT) return;
+
+  byte pin = FAN_CONTROL_PWM_PIN[fan];
+
+  pinMode(pin,OUTPUT);   // PWM Output Pin For Fan
+  setPWMPrescaler(pin,FAN_CONTROL_PWM_PRESCALE[fan]); // Sets 31.25KHz / 256 = 122Hz Frequency
+  
+  // write the PWM  
+  analogWrite(pin,pwm);
+}
+  
+/*
+  
 // <5% - then 0
 // <10% - then just inc / dec by 1
 // <20% - 3
@@ -2102,6 +2226,8 @@ byte compareCurrentAndTarget(int current, int target) {
   return 1;
 //  return 5;
 }
+
+*/
 
 //
 // ------------
