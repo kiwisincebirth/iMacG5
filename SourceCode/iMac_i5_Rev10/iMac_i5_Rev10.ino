@@ -1991,20 +1991,16 @@ void readInputSetFanPWM() {
     currentPWM[0] = currentPWM[0]>=factor ? currentPWM[0]-factor : 0;
   }
 
-  if ( debugFans ) {  
-    //Serial.print(getTemp1());
-    //Serial.print(F("\t"));
-    //Serial.print(getTemp2());
-    //Serial.print(F("\t"));
-    Serial.print(factor);
-    Serial.print(F("\t"));
-    Serial.print(targetFanValue[0]);
-    Serial.print(F("\t"));
-    Serial.print(currentFanValue);
-    Serial.print(F("\t"));
-    Serial.print(currentPWM[0]); // Current PWM
-    Serial.println(); 
-  }
+//  if ( debugFans ) {  
+//    Serial.print(factor);
+//    Serial.print(F("\t"));
+//    Serial.print(targetFanValue[0]);
+//    Serial.print(F("\t"));
+//    Serial.print(currentFanValue);
+//    Serial.print(F("\t"));
+//    Serial.print(currentPWM[0]); // Current PWM
+//    Serial.println(); 
+//  }
   
   // write the PWM  
   analogWrite(FAN_CONTROL_PWM[0],currentPWM[0]);
@@ -2058,6 +2054,22 @@ void readInputSetFanPWM() {
       currentPWM[fan] = currentPWM[fan]>factor ? currentPWM[fan]-factor : 0;
     }
   
+    if ( debugFans ) {  
+      Serial.print(fan);
+      Serial.print(F("\t"));
+      Serial.print(currentFanValue);
+      Serial.print(F("\t"));
+      Serial.print(targetFanValue[fan]);
+      Serial.print(F("\t"));
+      Serial.print(factor);
+      Serial.print(F("\t"));
+      Serial.print(targetFanValue[fan]);
+      Serial.print(F("\t"));
+      Serial.print(currentPWM[fan]);
+      Serial.print(F("\t"));
+      Serial.println(); 
+    }
+  
     // write the PWM  
     analogWrite(FAN_CONTROL_PWM[fan],currentPWM[fan]);
   }
@@ -2078,16 +2090,17 @@ byte compareCurrentAndTarget(int current, int target) {
   
   if (percent<5) {
     return 0;
-  } else if (percent <20) {
-    return 1;
-  } else if (percent <30) {
-    return 2;
-  } else if (percent <40) {
-    return 3;
-  } else if (percent <50) {
-    return 4;
+//  } else if (percent <20) {
+//    return 1;
+//  } else if (percent <30) {
+//    return 2;
+//  } else if (percent <40) {
+//    return 3;
+//  } else if (percent <50) {
+//    return 4;
   }
-  return 5;
+  return 1;
+//  return 5;
 }
 
 //
@@ -2483,7 +2496,14 @@ void processCommand(String cmd) {
 #ifdef COMMANDABLE
   
   } else if (firstCmd.equals("C")) {
+    #ifdef CAPACITIVE
     processCommandCapacitive(secondCmd,extraCmd);
+    #else
+    Serial.println(F("Capacative control not supported."));
+    #endif
+
+  } else if (firstCmd.equals("D")) {
+    Serial.println(F("Servo control not supported."));
 
   } else if (firstCmd.equals("E")) {
     processCommandEeprom(secondCmd,extraCmd);
@@ -2491,24 +2511,20 @@ void processCommand(String cmd) {
   } else if (firstCmd.equals("F")) {
     processCommandFan(secondCmd,extraCmd);
 
-  } else if (firstCmd.equals("S")) {
-    processCommandSystem(secondCmd,extraCmd);
-
   } else if (firstCmd.equals("L")) {
     processCommandLed(secondCmd,extraCmd);
 
   } else if (firstCmd.equals("M")) {
     processCommandMelody(secondCmd,extraCmd);
     
-  } else if (firstCmd.equals("D")) {
-    Serial.println(F("Servo control not supported."));
+  } else if (firstCmd.equals("P")) {
+    processCommandPower(secondCmd,extraCmd);
+
+  } else if (firstCmd.equals("S")) {
+    processCommandSystem(secondCmd,extraCmd);
 
   } else {
-    #ifdef CAPACITIVE
-    Serial.println(F("Commands: B (Brighness), C (Capacitive), E (EEPROM), F (Fans), L (LED), S (system)"));
-    #else
-    Serial.println(F("Commands: B (Brighness), E (EEPROM), F (Fans), L (LED), S (system)"));
-    #endif
+    Serial.println(F("Commands: B (Brighness), C (Capacitive), E (EEPROM), F (Fans), L (LED), M (Melody), P (Power), S (system)"));
 #endif    
 
   }
@@ -2516,6 +2532,16 @@ void processCommand(String cmd) {
 }
 
 #ifdef COMMANDABLE
+
+void processCommandPower(String subCmd, String extraCmd) {
+  
+  if (subCmd.equals("A")) { 
+    activatePSU();
+    
+  } else {  
+    Serial.println(F("Power Command Unknown: A (activate)"));
+  }
+}
 
 void processCommandLed(String subCmd, String extraCmd) {
   
@@ -2546,13 +2572,13 @@ void processCommandSystem(String subCmd, String extraCmd) {
     flushPSUActiviation(); // Flushes PSU Time to EEPROM
     flushLCDActiviation();
     
-    Serial.print("SMC Power Cycles ");
+    Serial.print(F("SMC Power Cycles "));
     Serial.println(eepromRead(EEP_CYC_SMC));
 
-    Serial.print("Power On  Cycles ");
+    Serial.print(F("Power On  Cycles "));
     Serial.println(eepromRead(EEP_CYC_POWER));
 
-    Serial.print("Sleep     Cycles ");
+    Serial.print(F("Sleep     Cycles "));
     Serial.println(eepromRead(EEP_CYC_SLEEP));
     
     Serial.print(F("Powered Hours "));
@@ -2565,26 +2591,6 @@ void processCommandSystem(String subCmd, String extraCmd) {
     
     Serial.print(F("LCD     Hours "));
     printHours(eepromRead(EEP_TIM_LCD));
-    Serial.println();
-    
-  } else if (subCmd.equals("U")) {
-    
-    // System Timers in-use
-    Serial.print(F("Threads used "));
-    Serial.print(timer.getNumTimers());    
-    Serial.println(F(" of 10"));
-
-    // System Ram Available in bytes. Leonamrdo has 2.5Kbyes
-    Serial.print(F("RAM in use "));
-    Serial.print(2560L - freeRam());    
-    Serial.println(F(" of 2560 bytes"));
-
-    Serial.print(F("SMC Up Time "));
-    printTime(millis()/1000L);
-    Serial.println();
-
-    Serial.print(F("CPU Up Time "));
-    printTime((millis()-millsOfLastStartup)/1000L);
     Serial.println();
     
   } else if (subCmd.equals("T")) {
@@ -2606,8 +2612,45 @@ void processCommandSystem(String subCmd, String extraCmd) {
     Serial.print(getFanRPM(1));
     Serial.println(RPM);
 
+    if (FAN_COUNT>2) {
+      Serial.print(F("Fan 3:  "));
+      Serial.print(getFanRPM(2));
+      Serial.println(RPM);
+    }
+    
+  } else if (subCmd.equals("U")) {
+    
+    // System Timers in-use
+    Serial.print(F("Threads used "));
+    Serial.print(timer.getNumTimers());    
+    Serial.println(F(" of 10"));
+
+    // System Ram Available in bytes. Leonamrdo has 2.5Kbyes
+    Serial.print(F("RAM in use "));
+    Serial.print(2560L - freeRam());    
+    Serial.println(F(" of 2560 bytes"));
+
+    Serial.print(F("SMC Up Time "));
+    printTime(millis()/1000L);
+    Serial.println();
+
+    Serial.print(F("CPU Up Time "));
+    printTime((millis()-millsOfLastStartup)/1000L);
+    Serial.println();
+    
+  } else if (subCmd.equals("V")) {
+    
+    Serial.print(F("Build Date "));
+    Serial.println(F(__DATE__));
+    
+    Serial.print(F("Build Time "));
+    Serial.println(F(__TIME__));
+
+    Serial.print(F("Compiler "));
+    Serial.println(F(__VERSION__));
+    
   } else {
-    Serial.println(F("System Command Unknown: S (stats), U (uptime)"));
+    Serial.println(F("System Command Unknown: S (stats), T (Temperature), U (uptime), V (Version)"));
   }
 }
 
