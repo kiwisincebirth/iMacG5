@@ -308,10 +308,10 @@ const byte FAN_CONTROL_PWM_PIN[] = { 9, 6, 10 } ;
 // Prescale Values for controlling PWM
 const int FAN_CONTROL_PWM_PRESCALE[] = { 1, 1, 1 };
 
-// Values in Percentage 
+// Values in Temperatures 
 #define OFF_FAN_VALUE 0
-#define MIN_FAN_VALUE 10
-#define MAX_FAN_VALUE 100
+#define MIN_FAN_VALUE 500
+#define MAX_FAN_VALUE 3000
 
 // -------------------- TEMPS 
 
@@ -767,6 +767,9 @@ void loopFiniteStateMachine() {
  */
 void startupAndTransition() {
 
+  // start up the fans.
+  setFanContolTarget( MAX_FAN_VALUE );
+  
   // signal the sucessfule startup
   activateFrontPanelFlash(3);
   
@@ -1351,8 +1354,8 @@ void readTempSetTarget() {
   // read the current temperature
   float tempAboveAmbient = getTempDiff();
     
-  // Computes the Factor 0 - 1 (with trig rounding) that the temp is on our MIN MAX Scale
-  float tempFactor = computeTempFactor(tempAboveAmbient);
+//  // Computes the Factor 0 - 1 (with trig rounding) that the temp is on our MIN MAX Scale
+//  float tempFactor = computeTempFactor(tempAboveAmbient);
 
 //  float minValue = (float)eepromRead(EEP_MIN_VOLT_RPM);
 //  float maxValue = (float)eepromRead(EEP_MAX_VOLT_RPM);
@@ -1360,26 +1363,24 @@ void readTempSetTarget() {
 //  // compute the Target Voltage based on the temperature 
 //  setFanContolTarget ( tempFactor * (maxValue - minValue) + minValue );
 
-  //
-  setFanContolTarget(tempFactor);
+  setFanContolTarget();
 }
 
 /**
  * Computes the Factor 0 - 100% (support > 100) that the temp is on our MIN MAX Scale
  * Function ensures temp is not outside correct range 
  */
-float computeTempFactor( float temp ) {
-  
-  float minTemp = (float)eepromRead(EEP_MIN_TEMP) / 100.0f;
-  float maxTemp = (float)eepromRead(EEP_MAX_TEMP) / 100.0f;
-  
-  if ( temp<=minTemp ) return 0.0f;
-//  if ( temp>=maxTemp ) return 1.0f;
-  
-  float tempFactor = ( temp-minTemp ) / ( maxTemp-minTemp ) * 100; 
-  
-  return computeTrigFactor(tempFactor);
-}
+//float computeTempFactor( float temp ) {
+//  
+//  float minTemp = (float)eepromRead(EEP_MIN_TEMP) / 100.0f;
+//  float maxTemp = (float)eepromRead(EEP_MAX_TEMP) / 100.0f;
+//  
+//  if ( temp<=minTemp ) return 0.0f;
+//  
+//  float tempFactor = ( temp-minTemp ) / ( maxTemp-minTemp ) * 100; 
+//  
+//  return computeTrigFactor(tempFactor);
+//}
 
 // PRIVATE ------------------- MONITORING INFO
 
@@ -1993,7 +1994,7 @@ void processCommandBrightness(String subCmd, String extraCmd) {
 // This controls all Fans, setting them to the same value
 void setFanContolTarget(float value) {
   
-  if (value<=1) {
+  if (value<=5) {
     
     analogWriteFanPWM(0,0);
     analogWriteFanPWM(1,0);
@@ -2001,17 +2002,17 @@ void setFanContolTarget(float value) {
     
   } else {
     
-    // Fan 0 => 45 - 95
-    analogWriteFanPWM(0,45+(value/2));
+    // Fan 0 => 50 - 95 for 5 - 20 degrees
+    analogWriteFanPWM(0,35+(value*3));
   
     byte pwm;
-    if (value<20) {
+    if (value<10) {
       pwm = 1;
-    } else if (value < 50) {
+    } else if (value < 15) {
       pwm = 2;
-    } else if (value < 75) {
+    } else if (value < 20) {
       pwm = 3;
-    } else if (value < 100) {
+    } else if (value < 25) {
       pwm = 4;
     } else { pwm = 5; }
     
@@ -2188,15 +2189,26 @@ void readInputSetFanPWM() {
 // Basic Write operation for a Fan
 void analogWriteFanPWM( byte fan, byte pwm ) {
 
-  if (fan>=FAN_CONTROL_COUNT) return;
-
-  byte pin = FAN_CONTROL_PWM_PIN[fan];
-
-  pinMode(pin,OUTPUT);   // PWM Output Pin For Fan
-  setPWMPrescaler(pin,FAN_CONTROL_PWM_PRESCALE[fan]); // Sets 31.25KHz / 256 = 122Hz Frequency
+  // init
+  initFanControlOutputs();
   
   // write the PWM  
-  analogWrite(pin,pwm);
+  analogWrite( FAN_CONTROL_PWM_PIN[fan] , pwm );
+}
+
+// init the Fan control output
+void initFanControlOutputs() {
+
+  static boolean initialised = false;
+  if (initialised) return;
+  
+  for ( byte fan=0; fan<FAN_CONTROL_COUNT; fan++ ) {
+    digitalWrite(FAN_CONTROL_PWM[fan],HIGH); // ensures minimum voltage
+    pinMode(FAN_CONTROL_PWM[fan],OUTPUT);   // PWM Output Pin For Fan
+    setPWMPrescaler(FAN_CONTROL_PWM[fan],FAN_CONTROL_PWM_PRESCALE[fan]); // Sets 31.25KHz / 256 = 122Hz Frequency
+  }
+  
+  initialised = true;
 }
   
 /*
