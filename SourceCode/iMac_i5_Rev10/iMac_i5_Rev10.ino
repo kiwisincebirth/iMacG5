@@ -130,7 +130,8 @@ __asm volatile ("nop");
 // 1.1 - 31/01/2015 - Added addition ifdefs to reduce size of bnary.
 // 1.2 - 15/02/2015 - Started to add support for RPM Fan Control
 // 1.3 - 19/04/2015 - Added Support for Mac Testers Slider App, Temps, 115200, OK
-// 1.4 - 331/6/2015 - Added final support for MacTesters Slider App
+// 1.4 - 31/06/2015 - Added final support for MacTesters Slider App
+// 1.5 - 15/08/2015 - Conversion to New Board
 //
 // --------------
 // Future Futures
@@ -1240,36 +1241,9 @@ void readTempSetTarget() {
  
   // read the current temperature
   float tempAboveAmbient = getTempDiff();
-    
-//  // Computes the Factor 0 - 1 (with trig rounding) that the temp is on our MIN MAX Scale
-//  float tempFactor = computeTempFactor(tempAboveAmbient);
-
-//  float minValue = (float)eepromRead(EEP_MIN_VOLT_RPM);
-//  float maxValue = (float)eepromRead(EEP_MAX_VOLT_RPM);
-//
-//  // compute the Target Voltage based on the temperature 
-//  setFanContolTarget ( tempFactor * (maxValue - minValue) + minValue );
 
   setFanContolTarget(tempAboveAmbient);
 }
-
-/**
- * Computes the Factor 0 - 100% (support > 100) that the temp is on our MIN MAX Scale
- * Function ensures temp is not outside correct range 
- */
-//float computeTempFactor( float temp ) {
-//  
-//  float minTemp = (float)eepromRead(EEP_MIN_TEMP) / 100.0f;
-//  float maxTemp = (float)eepromRead(EEP_MAX_TEMP) / 100.0f;
-//  
-//  if ( temp<=minTemp ) return 0.0f;
-//  
-//  float tempFactor = ( temp-minTemp ) / ( maxTemp-minTemp ) * 100; 
-//  
-//  return computeTrigFactor(tempFactor);
-//}
-
-// PRIVATE ------------------- MONITORING INFO
 
 //
 // =======
@@ -1900,108 +1874,7 @@ void setFanContolTarget(float value) {
     analogWriteFanPWM(2,pwm);
     
   }
-  
-//  for ( int fan=0; fan<FAN_COUNT; fan++ ) {
-//    setFanContolTarget( fan, value );
-//  }
-
 }
-
-/*
-
-// Set the Target Fan RPM ( cVolt LM317) for a specified Fan
-// this can be used for independant Fan Control.
-// Mode only support a singe (0) target
-void setFanContolTarget(byte fan,  int value) {
-  
-  // set the target voltage  
-  targetFanValue[fan] = value;
-  
-  // init the controller
-  initFanController();
-}
-
-// TARGET RPM (cVolt LM317)
-int getFanControlTarget(byte fan) {
-  return targetFanValue[fan];
-}
-
-int fanControlTimer = -1; // timer that controls fan voltages
-
-void initFanController() {
-  
-  if (fanControlTimer>=0) return;
-
-//  // set up the three PWM outputs
-//  for ( byte fan=0; fan<FAN_CONTROL_COUNT; fan++ ) {
-//    
-//    digitalWrite(FAN_CONTROL_PWM_PIN[fan],HIGH); // ensures minimum voltage
-//    pinMode(FAN_CONTROL_PWM_PIN[fan],OUTPUT);   // PWM Output Pin For Fan
-//    setPWMPrescaler(FAN_CONTROL_PWM_PIN[fan],FAN_CONTROL_PWM_PRESCALE[fan]); // Sets 31.25KHz / 256 = 122Hz Frequency
-//  }
-
-  // setup a timer that runs every 50 ms - To Set Fan Speed
-  fanControlTimer = timer.setInterval(FAN_CONTROL_PERIOD,readInputSetFanPWM);
-}
-
-// Just Default Mid Range PWM Values
-byte currentPWM[] = { 30, 30, 30 }; 
-
-byte getCurrentPWM(byte fan) {
-  return currentPWM[fan];
-}
-
-//
-// ----------------------
-// FAN OUTPUT RPM CONTROL
-// ----------------------
-// 
-
-// PRIVATE ------------------
-
-// called by a timer every second
-void readInputSetFanPWM() {
-  
-  for ( byte fan=0; fan<FAN_COUNT; fan++ ) {
-
-    // target RPM if fans are not active
-    // int currentFanValue = getFanRPM(fan);
-  
-    // what is a easonable amount to change PWM by
-    // byte factor = compareCurrentAndTarget(currentFanValue,targetFanValue[fan]);
-  
-    //if ( currentFanValue < targetFanValue[fan] ) {
-    
-      // Slow fans down slowely, rather than hard off.
-      // increasing PWM duty, lowers the voltage
-    //  currentPWM[fan] = currentPWM[fan]<(255-factor) ? currentPWM[fan]+factor : 255;
-    
-    //} else if ( currentFanValue > targetFanValue[fan] ) {
-    
-      // Slowly ramp up the fan speed, rather than hard on.
-      // decreasing PWM duty, increases the voltage
-    //  currentPWM[fan] = currentPWM[fan]>factor ? currentPWM[fan]-factor : 0;
-    //}
-
-    currentPWM[fan];
-    targetFanValue[fan];
-  
-    if ( debugFans ) {  
-//      Serial.print(fan);
-//      Serial.print(F("\t"));
-//      Serial.print(targetFanValue[fan]);
-//      Serial.print(F("\t"));
-//      Serial.print(currentPWM[fan]);
-//      Serial.print(F("\t"));
-//      Serial.println(); 
-    }
-  
-    // write the PWM  
-    analogWriteFanPWM(fan,currentPWM[fan]);
-  }
-}
-
-*/
 
 // Basic Write operation for a Fan
 void analogWriteFanPWM( byte fan, byte pwm ) {
@@ -2028,36 +1901,6 @@ void initFanControlOutputs() {
   initialised = true;
 }
   
-/*
-  
-// <5% - then 0
-// <10% - then just inc / dec by 1
-// <20% - 3
-// <50% - 5
-// >50% - 10
-byte compareCurrentAndTarget(int current, int target) {
-  
-  int diff = current-target;
-  if (diff < 0) diff = diff * -1;
-  byte percent = 100.0f* (float)diff / (float)target;
-  
-  if (percent<5) {
-    return 0;
-//  } else if (percent <20) {
-//    return 1;
-//  } else if (percent <30) {
-//    return 2;
-//  } else if (percent <40) {
-//    return 3;
-//  } else if (percent <50) {
-//    return 4;
-  }
-  return 1;
-//  return 5;
-}
-
-*/
-
 //
 // ------------
 // CHIME OUTPUT
