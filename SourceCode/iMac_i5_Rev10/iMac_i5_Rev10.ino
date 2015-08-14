@@ -1363,7 +1363,7 @@ void readTempSetTarget() {
 //  // compute the Target Voltage based on the temperature 
 //  setFanContolTarget ( tempFactor * (maxValue - minValue) + minValue );
 
-  setFanContolTarget();
+  setFanContolTarget(tempAboveAmbient);
 }
 
 /**
