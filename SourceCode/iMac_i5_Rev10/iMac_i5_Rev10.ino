@@ -25,8 +25,8 @@ __asm volatile ("nop");
  */
 
 //#define DEBUG // enables debig mode
-//#define LEGACYBOARD // supports the legacy fan control LM317, proto board  
-//#define LEGACY-RPM // Legacy Controlled by RPM Inputs, not LM317
+//#define LEGACYBOARD // supports the legacy fan control LM317 voltage, proto board  
+//#define LEGACY-RPM // Legacy Controlled by RPM Inputs, not LM317 Voltage feedback
 #define COMMANDABLE // has all commands not just brightness
 //#define CAPACITIVE // support for cap touch sensors
 #define TEMPERATURE // temperature intput for fans
@@ -105,7 +105,8 @@ __asm volatile ("nop");
 #define CAPACITIVE_RECALIBRATE_PERIOD 600000
 
 // Some important constants
-#define SERIAL_BAUD_RATE 9600
+//#define SERIAL_BAUD_RATE 9600
+#define SERIAL_BAUD_RATE 115200
 
 // ---------------------
 
@@ -118,6 +119,8 @@ __asm volatile ("nop");
 #define COLON ':'
 #define EQUALS '='
 #define ZERO '0'
+#define DEGC " °C" // DEGC " degC"
+#define RPM " RPM"
 
 //
 // ================
@@ -128,13 +131,14 @@ __asm volatile ("nop");
 // 1.1 - 31/01/2015 - Simplified EEPROM Code, Long support Only.
 // 1.1 - 31/01/2015 - Added addition ifdefs to reduce size of bnary.
 // 1.2 - 15/02/2015 - Started to add support for RPM Fan Control
+// 1.3 - 19/04/2015 - Added Support for Mac Testers Slider App, Temps, 115200, OK
+// 1.4 - 331/6/2015 - Added final support for MacTesters Slider App
 //
 // --------------
 // Future Futures
 // --------------
 // Better Capacitance Calibration Routines, that ask user to touch sensor, then measure
 // If brightness change by Capacatance report report back to the app, so slider can moved
-// System State command SS - FSM State, Power, Inverter, etc
 //
 
 //
@@ -568,7 +572,7 @@ boolean isLocationException(byte location) {
 }
 
 boolean isProtectedException(byte location) {
-  return location <= 16;
+  return location < 16;
 }
 
 int inline eepromLocation(byte location) {
@@ -619,7 +623,7 @@ void eepromReadCommand(String extraCmd) {
   if (location>0 && !isLocationException(location) ) {
     eepromReadCommand(location);
   } else {
-    for (byte i = 16;i<sizeofEeprom();i++) {
+    for (byte i = 0;i<sizeofEeprom();i++) {
       eepromReadCommand(i);
     }
   }
@@ -1232,21 +1236,35 @@ void processCommandFan(String subCmd, String extraCmd) {
     Serial.print(F("Fans Set To Min"));
     Serial.println(timer.isEnabled(tempFanControlTimer));
 
+  } else if (subCmd.equals("R")) {
+    // Fan Read (Slider Applet reads from the Arduino)
+    Serial.print(getFanRPM(0));
+    Serial.print(";");
+    Serial.print(getFanRPM(1));
+    Serial.print(";");
+    if (FAN_COUNT>2) Serial.print(getFanRPM(2)); else Serial.print(0);
+    Serial.print(";");
+    Serial.print(getTemp1());
+    Serial.print(";");
+    Serial.print(getTemp2());
+    Serial.print(";");
+    Serial.println(getTemp3());
+
   } else if (subCmd.equals("M")) {
     deactivateTempFanControl();
     Serial.print(F("Fans Set To Max"));
     setFanContolTarget( MAX_FAN_VALUE );
 
   } else if (subCmd.equals("L")) {
-    //activateTempFanMonitor();
+    // "LOG" - Starts Logging
     debugFans = true;
     
   } else if (subCmd.equals("O")) {
-    //deactivateTempFanMonitor();
+    // "OFF" - Stops Logging
     debugFans = false;
 
   } else {
-    Serial.println(F("Fan Command Unknown: FM (max), FA (activate), FD (deactivate), FL (log), FO (log off)"));
+    Serial.println(F("Fan Command Unknown: FM (max), FA (activate), FR (read), FD (deactivate), FL (log), FO (log off)"));
   }  
 }
 
@@ -1362,11 +1380,11 @@ void interruptFan1() {
 }
 
 void interruptFan2() {
-  fanRotationCount[1] ++;
+  fanRotationCount[1]++;
 }
 
 void interruptFan3() {
-  fanRotationCount[2] ++;
+  fanRotationCount[2]++;
 }
 
 int getFanRPM( byte fan ) {
@@ -1407,7 +1425,9 @@ int getFanRPM( byte fan ) {
 
 #ifdef TEMPERATURE
 
-float ambient_temp = DEVICE_DISCONNECTED_C;
+//float temp_1 = DEVICE_DISCONNECTED_C;
+float temp_1 = 20;
+float temp_2 = 30;
 
 /**
  * Get the current Main Temperatire
@@ -1426,34 +1446,45 @@ float getTempDiff() {
   }
   
   sensors.requestTemperatures(); // Send the command to get temperatures
-  float temp0 = sensors.getTempCByIndex(0); 
-  float temp1 = sensors.getTempCByIndex(1); 
+  float readtemp0 = sensors.getTempCByIndex(0); 
+  float readtemp1 = sensors.getTempCByIndex(1); 
   
-  if (temp0==DEVICE_DISCONNECTED_C || temp1==DEVICE_DISCONNECTED_C) return -1;
+  //if (temp0==DEVICE_DISCONNECTED_C || temp1==DEVICE_DISCONNECTED_C) return -1;
   
-  if (temp0 > temp1) {
-    ambient_temp = temp1;
-    return temp0 - temp1;
+  if (readtemp0 > readtemp1) {
+    temp_1 = readtemp1;
+    temp_2 = readtemp0;
   } else {
-    ambient_temp = temp0;
-    return temp1 - temp0;
+    temp_1 = readtemp0;
+    temp_2 = readtemp1;
   }
+  
+  return temp_2 - temp_1;
 }
 
 /**
  * Get the Ambiant Temp which is based on secondary temp sensor
  * and is levellled ober time, so no big spikes.
  */
-float getAmbientTemp() {
-  
-  return ambient_temp;
+float getTemp1() {
+  return temp_1;
+}
+
+float getTemp2() {
+  return temp_2;
+}
+
+float getTemp3() {
+  return 0;
 }
 
 #else
 
-float getTempDiff()    { return 10; }
-float getAmbientTemp() { return 20; }
-  
+float getTempDiff() { return 10; }
+float getTemp1()    { return 20; }
+float getTemp2()    { return 30; }
+float getTemp3()    { return  0; }
+
 #endif
 
 //
@@ -1810,10 +1841,18 @@ byte setInverterPWMBrightness() {
     byte inverterMax = eepromRead(EEP_MAX_BRIGHT);
     int range = inverterMax - inverterMin;
     byte pwmValue = ( range * getInverterBright() / 100 ) + inverterMin;  
+    #ifdef LEGACYBOARD
     analogWrite(INVERTER_PWM,pwmValue);
+    #else
+    analogWrite(INVERTER_PWM,255-pwmValue);
+    #endif
     return pwmValue;
   } else {
+    #ifdef LEGACYBOARD
     analogWrite(INVERTER_PWM,0);
+    #else
+    analogWrite(INVERTER_PWM,255);
+    #endif
     return 0;
   }
 }
@@ -1836,18 +1875,14 @@ void processCommandBrightness(String subCmd, String extraCmd) {
   } else if (subCmd.equals("A")) {
     // Activate Inverter
     activateInverter();
+    deactivateFrontPanelLED();
+    Serial.println("OK");
     
   } else if (subCmd.equals("D")) {
     // Deactivate Inverter
     deactivateInverter();
-    
-//  } else if (subCmd.equals("+")) {
-//    // Deactivate Inverter
-//    incInverterBright();
-//    
-//  } else if (subCmd.equals("-")) {
-//    // Deactivate Inverter
-//    decInverterBright();
+    activateFrontPanelLED();
+    Serial.println("OK");
     
   } else {
     Serial.println(F("Brightness Command Unknown: BR (read), BW (write), BA (activate), BD (deactivate)"));
@@ -1956,20 +1991,16 @@ void readInputSetFanPWM() {
     currentPWM[0] = currentPWM[0]>=factor ? currentPWM[0]-factor : 0;
   }
 
-  if ( debugFans ) {  
-    //Serial.print(getAmbientTemp());
-    //Serial.print(F("\t"));
-    //Serial.print(getTempDiff());
-    //Serial.print(F("\t"));
-    Serial.print(factor);
-    Serial.print(F("\t"));
-    Serial.print(targetFanValue[0]);
-    Serial.print(F("\t"));
-    Serial.print(currentFanValue);
-    Serial.print(F("\t"));
-    Serial.print(currentPWM[0]); // Current PWM
-    Serial.println(); 
-  }
+//  if ( debugFans ) {  
+//    Serial.print(factor);
+//    Serial.print(F("\t"));
+//    Serial.print(targetFanValue[0]);
+//    Serial.print(F("\t"));
+//    Serial.print(currentFanValue);
+//    Serial.print(F("\t"));
+//    Serial.print(currentPWM[0]); // Current PWM
+//    Serial.println(); 
+//  }
   
   // write the PWM  
   analogWrite(FAN_CONTROL_PWM[0],currentPWM[0]);
@@ -2023,6 +2054,22 @@ void readInputSetFanPWM() {
       currentPWM[fan] = currentPWM[fan]>factor ? currentPWM[fan]-factor : 0;
     }
   
+    if ( debugFans ) {  
+      Serial.print(fan);
+      Serial.print(F("\t"));
+      Serial.print(currentFanValue);
+      Serial.print(F("\t"));
+      Serial.print(targetFanValue[fan]);
+      Serial.print(F("\t"));
+      Serial.print(factor);
+      Serial.print(F("\t"));
+      Serial.print(targetFanValue[fan]);
+      Serial.print(F("\t"));
+      Serial.print(currentPWM[fan]);
+      Serial.print(F("\t"));
+      Serial.println(); 
+    }
+  
     // write the PWM  
     analogWrite(FAN_CONTROL_PWM[fan],currentPWM[fan]);
   }
@@ -2043,16 +2090,17 @@ byte compareCurrentAndTarget(int current, int target) {
   
   if (percent<5) {
     return 0;
-  } else if (percent <20) {
-    return 1;
-  } else if (percent <30) {
-    return 2;
-  } else if (percent <40) {
-    return 3;
-  } else if (percent <50) {
-    return 4;
+//  } else if (percent <20) {
+//    return 1;
+//  } else if (percent <30) {
+//    return 2;
+//  } else if (percent <40) {
+//    return 3;
+//  } else if (percent <50) {
+//    return 4;
   }
-  return 5;
+  return 1;
+//  return 5;
 }
 
 //
@@ -2061,15 +2109,15 @@ byte compareCurrentAndTarget(int current, int target) {
 // ------------
 //
 
-long delayBeforeChime;
+unsigned int delayBeforeChime;
 
-void initiateTimedChime( long delayBefore ) {
+void initiateTimedChime( unsigned int delayBefore ) {
   
    // DEBUG
   DEBUG_PRINTF("CHIME");
   
     // set the time to wait
-  delayBeforeChime = delayBefore;
+  delayBeforeChime = delayBefore + 5; // NOTE delay cannot be 0, as this breaks
 
   // setup a timer to press the button  
   timer.setVariableTimer(chimeOutputCallback);
@@ -2173,6 +2221,10 @@ void deactivateFrontPanelLED() {
   setFrontPanelLEDBright(0);
 }
 
+void activateFrontPanelLED() {
+  setFrontPanelLEDBright(255);
+}
+
 void activateFrontPanelLEDBreath() {
   setFrontPanelLEDEffect(LEDMODE_BREATH,0L);
 }
@@ -2192,7 +2244,7 @@ void activateFrontPanelFlash(byte count) {
 }
 
 /**
- * Sets the brightness 0 - 1 of front panel LED
+ * Sets the brightness 0 - 255 of front panel LED
  */
 void setFrontPanelLEDBright(byte value) {
   initLEDBrightness();
@@ -2205,8 +2257,8 @@ void setFrontPanelLEDBright(byte value) {
 unsigned long ledEffectStartTime = 0; // when did the effect start
 unsigned long ledEffectDuration = 0; // is there a duration of the effect (fade)
 
-float ledBase=0; // the minimum LED value
-float ledFactor=255; // the maximum (multiplier)
+float ledBase=0; // the minimum LED value, copied from eeprom
+float ledFactor=255; // the maximum (multiplier), copied from eeprom
 
 void setFrontPanelLEDEffect(byte mode, unsigned long duration) {
   initLEDBrightness();
@@ -2286,6 +2338,7 @@ byte floatToPWMWithOffset( float value ) {
 // current ACTUAL PWM brightness, used for smoothing
 int actualLEDBright = 0; 
 
+// value between 0 and 255
 void setActualLEDBrightWithDamping( int value ) {
   
   // delta of 25 every 10ms gives 100ms (1/10 second) from off to on
@@ -2302,6 +2355,7 @@ void setActualLEDBrightWithDamping( int value ) {
   setActualLEDBright( actualLEDBright + delta );
 }
 
+// value betweeen 0 and 255
 void setActualLEDBright( int value ) {
   // this is where we convert float to PWM
   actualLEDBright = value;
@@ -2435,14 +2489,21 @@ void processCommand(String cmd) {
   String firstCmd = cmd.substring(0,1);
   String secondCmd = cmd.substring(1,2);
   String extraCmd = cmd.substring(2);
-  
+
   if (firstCmd.equals("B")) {
     processCommandBrightness(secondCmd,extraCmd);
-  
+    
 #ifdef COMMANDABLE
   
   } else if (firstCmd.equals("C")) {
+    #ifdef CAPACITIVE
     processCommandCapacitive(secondCmd,extraCmd);
+    #else
+    Serial.println(F("Capacative control not supported."));
+    #endif
+
+  } else if (firstCmd.equals("D")) {
+    Serial.println(F("Servo control not supported."));
 
   } else if (firstCmd.equals("E")) {
     processCommandEeprom(secondCmd,extraCmd);
@@ -2450,12 +2511,20 @@ void processCommand(String cmd) {
   } else if (firstCmd.equals("F")) {
     processCommandFan(secondCmd,extraCmd);
 
+  } else if (firstCmd.equals("L")) {
+    processCommandLed(secondCmd,extraCmd);
+
+  } else if (firstCmd.equals("M")) {
+    processCommandMelody(secondCmd,extraCmd);
+    
+  } else if (firstCmd.equals("P")) {
+    processCommandPower(secondCmd,extraCmd);
+
   } else if (firstCmd.equals("S")) {
     processCommandSystem(secondCmd,extraCmd);
 
   } else {
-    Serial.println(F("Command Unknown: B (brighness), C (capacitive), E (eeprom), F (fans), S (system)"));
-    
+    Serial.println(F("Commands: B (Brighness), C (Capacitive), E (EEPROM), F (Fans), L (LED), M (Melody), P (Power), S (system)"));
 #endif    
 
   }
@@ -2464,6 +2533,38 @@ void processCommand(String cmd) {
 
 #ifdef COMMANDABLE
 
+void processCommandPower(String subCmd, String extraCmd) {
+  
+  if (subCmd.equals("A")) { 
+    activatePSU();
+    
+  } else {  
+    Serial.println(F("Power Command Unknown: A (activate)"));
+  }
+}
+
+void processCommandLed(String subCmd, String extraCmd) {
+  
+  if (subCmd.equals("T")) { 
+    activateFrontPanelFlash(5);
+    Serial.println(F("LED test in progress"));
+    
+  } else {  
+    Serial.println(F("LED Command Unknown: T (test)"));
+  }
+}
+
+void processCommandMelody(String subCmd, String extraCmd) {
+  
+  if (subCmd.equals("P")) { 
+    initiateTimedChime(0); // Play Chime
+    Serial.println(F("Melody test in progress"));
+    
+  } else {  
+    Serial.println(F("Melody Command Unknown: P (Play)"));
+  }
+}
+
 void processCommandSystem(String subCmd, String extraCmd) {
   
   if (subCmd.equals("S")) {
@@ -2471,15 +2572,13 @@ void processCommandSystem(String subCmd, String extraCmd) {
     flushPSUActiviation(); // Flushes PSU Time to EEPROM
     flushLCDActiviation();
     
-    Serial.println();
-    
-    Serial.print("SMC Power Cycles ");
+    Serial.print(F("SMC Power Cycles "));
     Serial.println(eepromRead(EEP_CYC_SMC));
 
-    Serial.print("Power On  Cycles ");
+    Serial.print(F("Power On  Cycles "));
     Serial.println(eepromRead(EEP_CYC_POWER));
 
-    Serial.print("Sleep     Cycles ");
+    Serial.print(F("Sleep     Cycles "));
     Serial.println(eepromRead(EEP_CYC_SLEEP));
     
     Serial.print(F("Powered Hours "));
@@ -2493,11 +2592,33 @@ void processCommandSystem(String subCmd, String extraCmd) {
     Serial.print(F("LCD     Hours "));
     printHours(eepromRead(EEP_TIM_LCD));
     Serial.println();
+    
+  } else if (subCmd.equals("T")) {
 
+    // TEMPERATURE
+    Serial.print(F("Ambient:   "));
+    Serial.print(getTemp1());
+    Serial.println(DEGC);
+
+    Serial.print(F("Internal:  "));
+    Serial.print(getTemp2());
+    Serial.println(DEGC);
+    
+    Serial.print(F("Fan 1:  "));
+    Serial.print(getFanRPM(0));
+    Serial.println(RPM);
+
+    Serial.print(F("Fan 2:  "));
+    Serial.print(getFanRPM(1));
+    Serial.println(RPM);
+
+    if (FAN_COUNT>2) {
+      Serial.print(F("Fan 3:  "));
+      Serial.print(getFanRPM(2));
+      Serial.println(RPM);
+    }
     
   } else if (subCmd.equals("U")) {
-    
-    Serial.println();
     
     // System Timers in-use
     Serial.print(F("Threads used "));
@@ -2517,17 +2638,19 @@ void processCommandSystem(String subCmd, String extraCmd) {
     printTime((millis()-millsOfLastStartup)/1000L);
     Serial.println();
     
-  } else if (subCmd.equals("T")) {
+  } else if (subCmd.equals("V")) {
+    
+    Serial.print(F("Build Date "));
+    Serial.println(F(__DATE__));
+    
+    Serial.print(F("Build Time "));
+    Serial.println(F(__TIME__));
 
-    Serial.print(F("Ambient    "));
-    Serial.print(getAmbientTemp());
-    Serial.println(F(" deg C"));
-    Serial.print(F("Difference "));
-    Serial.print(getTempDiff());
-    Serial.println(F(" deg C"));
+    Serial.print(F("Compiler "));
+    Serial.println(F(__VERSION__));
     
   } else {
-    Serial.println(F("System Command Unknown: S (stats), T (temps), U (uptime)"));
+    Serial.println(F("System Command Unknown: S (stats), T (Temperature), U (uptime), V (Version)"));
   }
 }
 

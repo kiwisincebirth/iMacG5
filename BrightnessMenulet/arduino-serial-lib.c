@@ -2,6 +2,7 @@
 // arduino-serial-lib -- simple library for reading/writing serial ports
 //
 // 2006-2013, Tod E. Kurt, http://todbot.com/blog/
+//          https://github.com/todbot/arduino-serial/
 //
 
 #include "arduino-serial-lib.h"
@@ -15,7 +16,7 @@
 #include <sys/ioctl.h>
 
 // uncomment this to debug reads
-//#define SERIALPORTDEBUG 
+//#define SERIALPORTDEBUG
 
 // takes the string name of the serial port (e.g. "/dev/tty.usbserial","COM1")
 // and a baud rate (bps) and connects to that port at that speed and 8N1.
