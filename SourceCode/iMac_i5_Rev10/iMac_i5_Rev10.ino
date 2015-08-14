@@ -2203,9 +2203,9 @@ void initFanControlOutputs() {
   if (initialised) return;
   
   for ( byte fan=0; fan<FAN_CONTROL_COUNT; fan++ ) {
-    digitalWrite(FAN_CONTROL_PWM[fan],HIGH); // ensures minimum voltage
-    pinMode(FAN_CONTROL_PWM[fan],OUTPUT);   // PWM Output Pin For Fan
-    setPWMPrescaler(FAN_CONTROL_PWM[fan],FAN_CONTROL_PWM_PRESCALE[fan]); // Sets 31.25KHz / 256 = 122Hz Frequency
+    digitalWrite(FAN_CONTROL_PWM_PIN[fan],HIGH); // ensures minimum voltage
+    pinMode(FAN_CONTROL_PWM_PIN[fan],OUTPUT);   // PWM Output Pin For Fan
+    setPWMPrescaler(FAN_CONTROL_PWM_PIN[fan],FAN_CONTROL_PWM_PRESCALE[fan]); // Sets 31.25KHz / 256 = 122Hz Frequency
   }
   
   initialised = true;
