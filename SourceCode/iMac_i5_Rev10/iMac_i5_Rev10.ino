@@ -25,8 +25,6 @@ __asm volatile ("nop");
  */
 
 //#define DEBUG // enables debig mode
-//#define LEGACYBOARD // supports the legacy fan control LM317 voltage, proto board  
-//#define LEGACY-RPM // Legacy Controlled by RPM Inputs, not LM317 Voltage feedback
 #define COMMANDABLE // has all commands not just brightness
 //#define CAPACITIVE // support for cap touch sensors
 #define TEMPERATURE // temperature intput for fans
@@ -161,105 +159,6 @@ __asm volatile ("nop");
 // Analog Pins can be used a digital ( refer to them as A0, A1, ...)
 //
 
-#ifdef LEGACYBOARD
-
-//
-// LEGACY PINS
-//
-
-// -------------- POWER DETECTION CONTROL
-
-// Power Switch Control Pins
-#define POWER_SWITCH_PIN_POUT 3 
- 
-// Main PSU Control to de-active ATX PSU
-#define PSU_DEACTIVATE_POUT 5
-
-// Power Notification
-#define SLEEP_LED_POUT 6
-
-// Pwer State Sense Pins
-#define NUC_POWER_LED_VCC_PIN 14
-#define NUC_POWER_LED_GND_PIN 15
-
-// ---------------------- FAN VOLTAGE INPUT
-
-// Fan Voltage Input Analog Detection
-#define FAN_OUTPUT_AIN A2
-
-// NUMBER OF FAN NPUTS
-#define FAN_COUNT 2
-
-// The Pins For Fan Input
-const byte FAN_RPM_PIN[] = { 0, 1 }; 
-
-// Interrupts that fans are attached to.
-#define FAN1_INTERRUPT 2 
-#define FAN2_INTERRUPT 3 
-
-// --------------------- FAN CONTROL
-
-#ifdef LEGACY-RPM
-
-// Time between controlling the Fans
-#define FAN_CONTROL_PERIOD 5000
-
-#else
-
-// Time between controlling the Fans
-#define FAN_CONTROL_PERIOD 100
-
-#endif
-
-// Number of Output Fan Control PWM's
-#define FAN_CONTROL_COUNT 1
-
-// PWM Fan Speed Voltage OUTPUT
-const byte FAN_CONTROL_PWM_PIN[] = { 9 } ;
-
-// Prescale Values for controlling PWM
-const long FAN_CONTROL_PWM_PRESCALE[] = {1};
-
-#ifdef LEGACY-RPM
-
-// Values in RPM
-#define OFF_FAN_VALUE 0
-#define MIN_FAN_VALUE 1000
-#define MAX_FAN_VALUE 4000
-
-#else
-
-// Values in Millivolts
-#define OFF_FAN_VALUE 100
-#define MIN_FAN_VALUE 330
-#define MAX_FAN_VALUE 1200
-
-#endif
-
-// -------------------- TEMPS 
-
-// Digital Pin For Temps
-#define TEMP_PIN 16
-
-// -------------------- INVERTER 
-
-// Inverter Brigtness PWM Out
-#define INVERTER_PWM 10 
-
-// --------------------- CAP TOUCH
-
-// Up and down capacitive touch broghtness pins
-#define TOUCH_COMMON_PIN_CAP 2
-#define TOUCH_DOWN_PIN_CAP 7
-#define TOUCH_UP_PIN_CAP 8
-
-// -------------------- CHIME
-
-// Chime Output --->>>  HIGH <<<---  Level OUTPUT
-#define CHIME_POUT 1
-
-#else
-
 //
 //
 // MODERN PINS
@@ -335,8 +234,6 @@ const int FAN_CONTROL_PWM_PRESCALE[] = { 1, 1, 1 };
 // Chime Output LOW Level OUTPUT
 #define CHIME_POUT A3
 
-#endif
-
 //
 // ================================================
 // EEPROM Locations that configuratyion data is stored
@@ -408,18 +305,8 @@ const char PROGMEM string_03[] PROGMEM = "MaxBright-PWM";
 const char PROGMEM string_04[] PROGMEM = "BrightInc-%";
 const char PROGMEM string_05[] PROGMEM = "MinTemp-.01c"; 
 const char PROGMEM string_06[] PROGMEM = "MaxTemp-.01c";
-#ifdef LEGACYBOARD
-  #ifdef LEGACY-RPM
 const char PROGMEM string_07[] PROGMEM = "MinRPM    "; // redefined to be RPM Range for the Fans
 const char PROGMEM string_08[] PROGMEM = "MaxRPM    ";
-  #else
-const char PROGMEM string_07[] PROGMEM = "MinVolt-.01v";
-const char PROGMEM string_08[] PROGMEM = "MaxVolt-.01v";
-  #endif
-#else
-const char PROGMEM string_07[] PROGMEM = "MinRPM    "; // redefined to be RPM Range for the Fans
-const char PROGMEM string_08[] PROGMEM = "MaxRPM    ";
-#endif
 const char PROGMEM string_09[] PROGMEM = "CapDnThresh"; 
 const char PROGMEM string_10[] PROGMEM = "CapUpThresh";
 const char PROGMEM string_11[] PROGMEM = "CapSamples";
@@ -1933,18 +1820,10 @@ byte setInverterPWMBrightness() {
     byte inverterMax = eepromRead(EEP_MAX_BRIGHT);
     int range = inverterMax - inverterMin;
     byte pwmValue = ( range * getInverterBright() / 100 ) + inverterMin;  
-    #ifdef LEGACYBOARD
-    analogWrite(INVERTER_PWM,pwmValue);
-    #else
     analogWrite(INVERTER_PWM,255-pwmValue);
-    #endif
     return pwmValue;
   } else {
-    #ifdef LEGACYBOARD
-    analogWrite(INVERTER_PWM,0);
-    #else
     analogWrite(INVERTER_PWM,255);
-    #endif
     return 0;
   }
 }
@@ -2032,7 +1911,7 @@ void setFanContolTarget(float value) {
 
 // Set the Target Fan RPM ( cVolt LM317) for a specified Fan
 // this can be used for independant Fan Control.
-// Legacy Mode only support a singe (0) target
+// Mode only support a singe (0) target
 void setFanContolTarget(byte fan,  int value) {
   
   // set the target voltage  
@@ -2071,66 +1950,6 @@ byte currentPWM[] = { 30, 30, 30 };
 byte getCurrentPWM(byte fan) {
   return currentPWM[fan];
 }
-
-#ifdef LEGACYBOARD
-
-//
-// --------------------------
-// Fan Output Voltage CONTROL
-// --------------------------
-//
-
-// PRIVATE ------------------
-
-// TODO The following is Legacy Code (LM317) eventually delete
-
-void readInputSetFanPWM() {
-  
-#ifdef LEGACY-RPM
-
-  // Average to the Two Fans RPMS Speeds
-  int currentFanValue = ( getFanRPM(0) + getFanRPM(1) ) / 2;
-  
-#else
-
-  // target centi Voltage produced by the LM317 
-  // *2 Voltage Divider *100 CentiVolt
-  int currentFanValue = 200.0f * readVoltage(FAN_OUTPUT_AIN);
-  
-#endif
-  
-  //byte factor = 1;
-  byte factor = compareCurrentAndTarget(currentFanValue,targetFanValue[0]);
-  
-  if ( currentFanValue > targetFanValue[0] ) {
-    
-    // Slow fans down slowely, rather than hard off.
-    // increasing PWM duty, lowers the voltage
-    currentPWM[0] = currentPWM[0]<=(60-factor) ? currentPWM[0]+factor : 60;
-    
-  } else if ( currentFanValue < targetFanValue[0] ) {
-    
-    // Slowly ramp up the fan speed, rather than hard on.
-    // decreasing PWM duty, increases the voltage
-    currentPWM[0] = currentPWM[0]>=factor ? currentPWM[0]-factor : 0;
-  }
-
-//  if ( debugFans ) {  
-//    Serial.print(factor);
-//    Serial.print(F("\t"));
-//    Serial.print(targetFanValue[0]);
-//    Serial.print(F("\t"));
-//    Serial.print(currentFanValue);
-//    Serial.print(F("\t"));
-//    Serial.print(currentPWM[0]); // Current PWM
-//    Serial.println(); 
-//  }
-  
-  // write the PWM  
-  analogWriteFanPWM(0,currentPWM[0]);
-}
-
-#else 
 
 //
 // ----------------------
@@ -2181,8 +2000,6 @@ void readInputSetFanPWM() {
     analogWriteFanPWM(fan,currentPWM[fan]);
   }
 }
-
-#endif
 
 */
 
