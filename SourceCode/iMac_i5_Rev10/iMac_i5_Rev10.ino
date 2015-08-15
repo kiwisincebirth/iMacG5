@@ -579,8 +579,8 @@ void eepromWriteCommand(String extraCmd) {
     byte location = loc.toInt();
     long value = val.toInt();
     
-    if ( isLocationException(location) || isProtectedException(location) ) {
-    //if ( isProtectedException(location) ) {  
+    //if ( isLocationException(location) || isProtectedException(location) ) {
+    if ( isLocationException(location) ) {  
       Serial.print(F("Cannot write to address "));
       Serial.println(location);
       return;
@@ -1338,6 +1338,7 @@ int getFanRPM( byte fan ) {
   double ret = (double) 30000 * fanRotationCount[fan] / elapsed;
   fanRotationCount[fan] = 0L;
   fanTimeStart[fan] = millis();
+  //if (fan==2) return ret / 2;
   return ret;
 }
 
@@ -1848,7 +1849,7 @@ void processCommandBrightness(String subCmd, String extraCmd) {
 // This controls all Fans, setting them to the same value
 void setFanContolTarget(float value) {
   
-  if (value<=5) {
+  if (value<=10) {
     
     analogWriteFanPWM(0,0);
     analogWriteFanPWM(1,0);
@@ -1860,26 +1861,36 @@ void setFanContolTarget(float value) {
     // analogWriteFanPWM(0,35+(value*3));    
   
     byte pwm;
-    if (value<5) {
-      pwm = 1;
-    } else if (value < 10) {
-      pwm = 2;
-    } else if (value < 15) {
-      pwm = 3;
+    if (value < 10) {
+      pwm = 0;
     } else if (value < 20) {
-      pwm = 4;
+      pwm = 1;
+    } else if (value < 20) {
+      pwm = 2;
     } else if (value < 25) {
-      pwm = 5;
+      pwm = 3;
     } else if (value < 30) {
-      pwm = 6;
+      pwm = 4;
     } else { 
-      pwm = 7; 
+      pwm = 5; 
     }
     
     // Fan 1 2 => 1 - 5
     analogWriteFanPWM(1,pwm);
-    // analogWriteFanPWM(2,pwm);
-    
+
+    if (value<15) {
+      pwm = 0;
+    } else {
+      if (value < 20) {
+        pwm = 1;
+      } else if (value < 30) {
+        pwm = 2;
+      } else { 
+        pwm = 3; 
+      }
+    if (getFanRPM(2)<100) pwm=pwm+1;
+    }
+    analogWriteFanPWM(2,pwm);
   }
 }
 
