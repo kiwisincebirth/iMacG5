@@ -1857,22 +1857,28 @@ void setFanContolTarget(float value) {
   } else {
     
     // Fan 0 => 50 - 95 for 5 - 20 degrees
-    analogWriteFanPWM(0,35+(value*3));
+    // analogWriteFanPWM(0,35+(value*3));    
   
     byte pwm;
-    if (value<10) {
+    if (value<5) {
       pwm = 1;
-    } else if (value < 15) {
+    } else if (value < 10) {
       pwm = 2;
-    } else if (value < 20) {
+    } else if (value < 15) {
       pwm = 3;
-    } else if (value < 25) {
+    } else if (value < 20) {
       pwm = 4;
-    } else { pwm = 5; }
+    } else if (value < 25) {
+      pwm = 5;
+    } else if (value < 30) {
+      pwm = 6;
+    } else { 
+      pwm = 7; 
+    }
     
     // Fan 1 2 => 1 - 5
     analogWriteFanPWM(1,pwm);
-    analogWriteFanPWM(2,pwm);
+    // analogWriteFanPWM(2,pwm);
     
   }
 }
@@ -1894,7 +1900,7 @@ void initFanControlOutputs() {
   if (initialised) return;
   
   for ( byte fan=0; fan<FAN_CONTROL_COUNT; fan++ ) {
-    digitalWrite(FAN_CONTROL_PWM_PIN[fan],HIGH); // ensures minimum voltage
+    digitalWrite(FAN_CONTROL_PWM_PIN[fan],LOW); // ensures minimum voltage
     pinMode(FAN_CONTROL_PWM_PIN[fan],OUTPUT);   // PWM Output Pin For Fan
     setPWMPrescaler(FAN_CONTROL_PWM_PIN[fan],FAN_CONTROL_PWM_PRESCALE[fan]); // Sets 31.25KHz / 256 = 122Hz Frequency
   }
