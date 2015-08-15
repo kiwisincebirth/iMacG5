@@ -22,6 +22,7 @@ __asm volatile ("nop");
  * Author : KiwiSinceBirth
  * Contributions : MacTester (capacitance)
  * Written : July 2014
+ * Last Updated : August 2015
  */
 
 //#define DEBUG // enables debig mode
@@ -1329,13 +1330,20 @@ void interruptFan3() {
 }
 
 int getFanRPM( byte fan ) {
-  return 0;
+  
+  initialiseFanRPM();
+  
+  // pulses counted; /2 pulses per rotation;  /millis elapsed; *60000 milliseconds per minute;
+  unsigned long elapsed = millis() - fanTimeStart[fan];
+  double ret = (double) 30000 * fanRotationCount[fan] / elapsed;
+  fanRotationCount[fan] = 0L;
+  fanTimeStart[fan] = millis();
+  return ret;
 }
 
-/*
-int getFanRPM( byte fan ) {
+void initialiseFanRPM() {
   
-  static boolean started = false;
+    static boolean started = false;
   if (!started) {
     started = true;
     
@@ -1360,15 +1368,8 @@ int getFanRPM( byte fan ) {
 #endif
   }
 
-  // pulses counted; /2 pulses per rotation;  /millis elapsed; *60000 milliseconds per minute;
-  unsigned long elapsed = millis() - fanTimeStart[fan];
-//  Serial.println(fanRotationCount[fan]);
-  unsigned long ret = 30000L / elapsed * fanRotationCount[fan];
-  fanRotationCount[fan] = 0L;
-  fanTimeStart[fan] = millis();
-  return ret;
 }
-*/
+
 
 //
 // ----------
