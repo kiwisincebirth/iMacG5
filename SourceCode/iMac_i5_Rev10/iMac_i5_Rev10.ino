@@ -1430,7 +1430,7 @@ float getTemp2() {
 }
 
 float getTemp3() {
-  return 0;
+  return temp_2-temp_1;
 }
 
 #else
@@ -1438,7 +1438,7 @@ float getTemp3() {
 float getTempDiff() { return 10; }
 float getTemp1()    { return 20; }
 float getTemp2()    { return 30; }
-float getTemp3()    { return  0; }
+float getTemp3()    { return 10; }
 
 #endif
 
@@ -1861,18 +1861,20 @@ void setFanContolTarget(float value) {
     // analogWriteFanPWM(0,35+(value*3));    
   
     byte pwm;
-    if (value < 10) {
+    if (value < 5) {
       pwm = 0;
-    } else if (value < 20) {
+    } else if (value < 10) {
       pwm = 1;
-    } else if (value < 20) {
+    } else if (value < 15) {
       pwm = 2;
-    } else if (value < 25) {
+    } else if (value < 20) {
       pwm = 3;
-    } else if (value < 30) {
+    } else if (value < 25) {
       pwm = 4;
+    } else if (value < 30) {
+      pwm = 5;
     } else { 
-      pwm = 5; 
+      pwm = 6; 
     }
     
     // Fan 1 2 => 1 - 5
@@ -1888,7 +1890,7 @@ void setFanContolTarget(float value) {
       } else { 
         pwm = 3; 
       }
-    if (getFanRPM(2)<100) pwm=pwm+1;
+      if (getFanRPM(2)<100) pwm=pwm+1;
     }
     analogWriteFanPWM(2,pwm);
   }
@@ -2420,6 +2422,10 @@ void processCommandSystem(String subCmd, String extraCmd) {
     Serial.print(getTemp2());
     Serial.println(DEGC);
     
+    Serial.print(F("Diff:  "));
+    Serial.print(getTemp3());
+    Serial.println(DEGC);
+
     Serial.print(F("Fan 1:  "));
     Serial.print(getFanRPM(0));
     Serial.println(RPM);
